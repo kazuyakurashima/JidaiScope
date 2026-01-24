@@ -1,4 +1,4 @@
-# 170: Onboarding Flow（Sprint 4）
+# 043: Onboarding Flow（Sprint 4）
 
 ## 概要
 
@@ -47,9 +47,9 @@ So that タイムラインを効果的に操作できる
 
 | 種類             | 詳細                                                                       |
 | ---------------- | -------------------------------------------------------------------------- |
-| ✓ 入力依存       | 020 (Settings/Onboarding store), 030 (Timeline canvas), 040 (Zoom gesture) |
+| ✓ 入力依存       | 014 (Settings/Onboarding store), 020 (Timeline canvas), 021 (Zoom gesture) |
 | ✗ コード依存     | なし                                                                       |
-| ✗ 他チケット依存 | 160 (Pro 紹介)                                                             |
+| ✗ 他チケット依存 | 042 (Pro 紹介)                                                             |
 
 ---
 
@@ -152,7 +152,7 @@ So that タイムラインを効果的に操作できる
 
 ## 実装ガイドライン
 
-### 1. Onboarding Store（020 対応）
+### 1. Onboarding Store（014 対応）
 
 ```typescript
 // stores/onboardingStore.ts
@@ -523,4 +523,4 @@ components/
 **優先度:** P2
 **推定工数:** 1.5d
 **ステータス:** Not Started
-**ブロッカー:** 020 (Settings/Onboarding store)
+**ブロッカー:** 014 (Settings/Onboarding store)

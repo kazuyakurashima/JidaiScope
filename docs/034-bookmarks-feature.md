@@ -1,4 +1,4 @@
-# 130: Bookmarks Feature（Sprint 3）
+# 034: Bookmarks Feature（Sprint 3）
 
 ## 概要
 
@@ -48,9 +48,9 @@ So that あとで素早く見返すことができる
 
 | 種類             | 詳細                                                                  |
 | ---------------- | --------------------------------------------------------------------- |
-| ✓ 入力依存       | 010 (bookmark テーブル), 020 (Store), 090/100 (Event/Person 詳細画面) |
+| ✓ 入力依存       | 012 (bookmark テーブル), 014 (Store), 031/032 (Event/Person 詳細画面) |
 | ✗ コード依存     | なし                                                                  |
-| ✗ 他チケット依存 | 080 (検索ロジック)                                                    |
+| ✗ 他チケット依存 | 030 (検索ロジック)                                                    |
 
 ---
 
@@ -69,7 +69,7 @@ interface Bookmark {
 }
 ```
 
-### SQL スキーマ（010 で定義）
+### SQL スキーマ（012 で定義）
 
 ```sql
 CREATE TABLE bookmark (
@@ -103,7 +103,7 @@ interface BookmarkedPerson extends Person {
 
 ## 実装ガイドライン
 
-### 1. Bookmark Store 作成（020 対応）
+### 1. Bookmark Store 作成（014 対応）
 
 ```typescript
 // stores/bookmarkStore.ts
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
 });
 ```
 
-### 3. Bookmark ボタンを Event Detail に統合（090 対応）
+### 3. Bookmark ボタンを Event Detail に統合（031 対応）
 
 ```typescript
 // app/event/[id].tsx
@@ -375,7 +375,7 @@ export default function BookmarkSearchScreen() {
 
 ## Todo リスト
 
-### Phase 1: SQLite スキーマ（010 対応）
+### Phase 1: SQLite スキーマ（012 対応）
 
 - [ ] bookmark テーブル定義
 - [ ] UNIQUE 制約（item_type, item_id）
@@ -391,8 +391,8 @@ export default function BookmarkSearchScreen() {
 ### Phase 3: Event/Person 詳細画面に ☆ ボタン
 
 - [ ] BookmarkButton コンポーネント作成
-- [ ] Event 詳細に統合（090）
-- [ ] Person 詳細に統合（100）
+- [ ] Event 詳細に統合（031）
+- [ ] Person 詳細に統合（032）
 - [ ] タップで store 更新
 
 ### Phase 4: Bookmark 一覧画面
@@ -449,4 +449,4 @@ app/bookmarks/
 **優先度:** P2
 **推定工数:** 2d
 **ステータス:** Not Started
-**ブロッカー:** 010 (bookmark テーブル), 090/100 (詳細画面)
+**ブロッカー:** 012 (bookmark テーブル), 031/032 (詳細画面)

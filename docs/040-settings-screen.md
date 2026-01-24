@@ -1,4 +1,4 @@
-# 140: Settings Screen（Sprint 3）
+# 040: Settings Screen（Sprint 4）
 
 ## 概要
 
@@ -6,12 +6,15 @@
 
 **スコープ:**
 
-- 言語選択 (日本語 / English)
+- 言語選択 (日本語 / English) ※追加仕様
 - テーマ設定 (Dark / Light)
 - ハプティクスフィードバック ON/OFF
-- キャッシュクリア
+- キャッシュクリア ※追加仕様
 - バージョン情報・ライセンス
-- 問い合わせリンク
+- 問い合わせリンク ※追加仕様
+- プライバシーポリシー・利用規約リンク
+
+> **📝 追加仕様について:** 「言語選択」「キャッシュクリア」「問い合わせリンク」は PRD v2.1 に明示的な記載がない追加機能です。MVP の UX 向上のため含めていますが、工数圧迫時は優先度を下げる判断が可能です。
 
 **成功基準:**
 
@@ -49,9 +52,18 @@ So that 自分の好みに合ったアプリ体験ができる
 
 | 種類             | 詳細                                                       |
 | ---------------- | ---------------------------------------------------------- |
-| ✓ 入力依存       | 020 (Settings store), 120 (Haptics 設定), 190 (Dark theme) |
+| ✓ 入力依存       | 014 (Settings store), 025 (Haptics 設定), 016 (Dark theme) |
 | ✗ コード依存     | なし                                                       |
-| ✗ 他チケット依存 | 020 (基盤 store)                                           |
+| ✗ 他チケット依存 | 014 (基盤 store)                                           |
+
+### ⚠️ 実装時注意：054 との連携
+
+**プライバシーポリシー・利用規約リンク** は Settings 画面に設置するが、054 (Privacy & Terms) は Sprint 5 で実装される。
+
+**対応方針:**
+1. 040 実装時は URL をプレースホルダーとして設置（`https://jidaiscope.app/privacy`, `https://jidaiscope.app/terms`）
+2. 054 完了後に実際の Web ページが公開される
+3. アプリ審査前に URL が有効であることを確認（055 チェックリスト項目）
 
 ---
 
@@ -95,7 +107,7 @@ const SETTINGS_KEYS = {
 
 ## 実装ガイドライン
 
-### 1. Settings Store 実装（020 対応）
+### 1. Settings Store 実装（014 対応）
 
 ```typescript
 // stores/settingsStore.ts
@@ -410,7 +422,7 @@ const styles = StyleSheet.create({
 });
 ```
 
-### 3. テーマ適用（190 との連携）
+### 3. テーマ適用（016 との連携）
 
 ```typescript
 // hooks/useTheme.ts
@@ -470,7 +482,7 @@ export default function TabsLayout() {
 
 ## Todo リスト
 
-### Phase 1: Settings Store 拡張（020 対応）
+### Phase 1: Settings Store 拡張（014 対応）
 
 - [ ] language: 'ja' | 'en' フィールド追加
 - [ ] theme: 'dark' | 'light' フィールド追加
@@ -482,7 +494,7 @@ export default function TabsLayout() {
 - [ ] app/settings.tsx 作成
 - [ ] 言語切り替えボタン
 - [ ] テーマ切り替えボタン
-- [ ] ハプティクス ON/OFF トグル（120 統合）
+- [ ] ハプティクス ON/OFF トグル（025 統合）
 
 ### Phase 3: キャッシュ管理機能
 
@@ -497,7 +509,7 @@ export default function TabsLayout() {
 - [ ] プライバシーポリシーリンク
 - [ ] メール / Discord リンク
 
-### Phase 5: テーマ適用（190 連携）
+### Phase 5: テーマ適用（016 連携）
 
 - [ ] useTheme() hook 実装
 - [ ] Settings 変更時に全画面リフレッシュ
@@ -516,10 +528,10 @@ export default function TabsLayout() {
 
 ```
 stores/
-└── settingsStore.ts         # Settings 状態管理（020 対応）
+└── settingsStore.ts         # Settings 状態管理（014 対応）
 
 hooks/
-└── useTheme.ts              # テーマ hook（190 連携）
+└── useTheme.ts              # テーマ hook（016 連携）
 
 app/
 └── settings.tsx             # Settings 画面
@@ -549,4 +561,4 @@ components/
 **優先度:** P2
 **推定工数:** 1.5d
 **ステータス:** Not Started
-**ブロッカー:** 020 (Settings store base)
+**ブロッカー:** 014 (Settings store base)

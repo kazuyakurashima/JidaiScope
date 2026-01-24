@@ -1,4 +1,4 @@
-# 070: Layer Management - レイヤー表示制御（Sprint 1）
+# 024: Layer Management - レイヤー表示制御（Sprint 2）
 
 ## 概要
 
@@ -44,12 +44,13 @@ So that 情報をシンプルに整理して学習できる
 
 ## 依存関係
 
-| 種類             | 詳細                                                   |
-| ---------------- | ------------------------------------------------------ |
-| ✓ 入力依存       | 030 (Timeline Core), 020 (State Management), 150 (IAP) |
-| ✗ コード依存     | TimelineCanvas の描画処理に組み込まれる                |
-| ✗ 他チケット依存 | なし                                                   |
-| ✓ 出力依存       | 140 (Settings)：レイヤー切り替えUI                     |
+| 種類             | 詳細                                                                       |
+| ---------------- | -------------------------------------------------------------------------- |
+| ✓ 入力依存       | 020 (Timeline Core), 014 (State Management - appStore.proUnlocked)         |
+| ✗ コード依存     | TimelineCanvas の描画処理に組み込まれる                                    |
+| ⓘ Pro 状態参照   | 014 の appStore.proUnlocked を参照（Sprint 1 は stub、Sprint 4 で IAP 連携）|
+| ✗ 他チケット依存 | なし（041 IAP 依存なし - Sprint 跨ぎ解消）                                 |
+| ✓ 出力依存       | 040 (Settings)：レイヤー切り替えUI                                         |
 
 ---
 
@@ -70,7 +71,8 @@ So that 情報をシンプルに整理して学習できる
   - [ ] 将軍：鎌倉/室町/江戸から各 2 代ずつ？
   - [ ] 人物：20 人ランダム選抜？
 - [ ] Pro 解放ロジック
-  - [ ] iapStore.isPro チェック → フルレイヤー表示
+  - [ ] appStore.proUnlocked チェック → フルレイヤー表示
+  - [ ] **注意:** Sprint 1 では stub (false)、Sprint 4 で IAP 連携後に動的切替
 
 ### Phase 3: settingsStore 統合
 
@@ -82,7 +84,7 @@ So that 情報をシンプルに整理して学習できる
 - [ ] drawReigns 関数に visibleLayers チェック追加
 - [ ] visibleLayers[type] = false → 描画スキップ
 
-### Phase 5: Settings UI（チケット 140 と連携）
+### Phase 5: Settings UI（チケット 040 と連携）
 
 - [ ] Layer Toggle スイッチ作成
 - [ ] Pro 限定レイヤーに ProBadge 表示
@@ -122,8 +124,11 @@ function drawReigns(canvas, { visibleLayers, ...props }) {
 }
 
 // Data filtering for Free users
-function filterReignsByPro(reigns: Reign[], isPro: boolean): Reign[] {
-  if (isPro) return reigns;
+// 020 の appStore.proUnlocked を参照
+import { useAppStore } from '@/stores/appStore';
+
+function filterReignsByPro(reigns: Reign[], proUnlocked: boolean): Reign[] {
+  if (proUnlocked) return reigns;
 
   // Free: 各時代から代表的な将軍のみ
   const filtered = reigns.filter((r) => {
@@ -132,6 +137,12 @@ function filterReignsByPro(reigns: Reign[], isPro: boolean): Reign[] {
     return r.ordinal <= 2;
   });
   return filtered;
+}
+
+// Hook: コンポーネントで使用
+function useFilteredReigns(reigns: Reign[]) {
+  const proUnlocked = useAppStore((s) => s.proUnlocked);
+  return filterReignsByPro(reigns, proUnlocked);
 }
 ```
 
@@ -167,4 +178,4 @@ stores/
 **優先度:** P0
 **推定工数:** 2d
 **ステータス:** Not Started
-**ブロッカー:** 030, 020, 150 完了
+**ブロッカー:** 020, 014 完了（041 IAP 依存なし）

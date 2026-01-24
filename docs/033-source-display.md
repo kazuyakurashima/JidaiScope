@@ -1,4 +1,4 @@
-# 110: Source/典拠 Display（Sprint 2）
+# 033: Source/典拠 Display（Sprint 3）
 
 ## 概要
 
@@ -46,8 +46,8 @@ So that クラスで信頼できる情報源だと紹介できる
 
 | 種類             | 詳細                                                                   |
 | ---------------- | ---------------------------------------------------------------------- |
-| ✓ 入力依存       | 010 (Database - Event テーブルに source 100件設定), 090 (Event Detail) |
-| ✗ コード依存     | 090 の SourceBadge コンポーネント統合                                  |
+| ✓ 入力依存       | 013 (Database - Event テーブルに source 100件設定), 031 (Event Detail) |
+| ✗ コード依存     | 031 の SourceBadge コンポーネント統合                                  |
 | ✗ 他チケット依存 | なし                                                                   |
 
 ---
@@ -124,12 +124,12 @@ interface Event {
 - [ ] URL がある場合、Linking.openURL() 統合
 - [ ] タップ領域確認（最小 44pt）
 
-### Phase 3: Event Detail 画面に統合（090 と連携）
+### Phase 3: Event Detail 画面に統合（031 と連携）
 
 - [ ] EventDetail.tsx に SourceBadge セクション追加
   - [ ] event.source の存在判定
   - [ ] ある場合のみセクション表示
-- [ ] 090 チケット完了後に 統合テスト
+- [ ] 031 チケット完了後に 統合テスト
 
 ### Phase 4: ドキュメント・ロードマップ
 
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
 ### Event Detail への統合
 
 ```typescript
-// app/event/[id].tsx (090 チケット内で実装)
+// app/event/[id].tsx (031 チケット内で実装)
 
 import { SourceBadge } from '@/components/cards/SourceBadge';
 
@@ -323,4 +323,4 @@ data/
 **優先度:** P1
 **推定工数:** 1.5d
 **ステータス:** Not Started
-**ブロッカー:** 010 (source データ設定), 090 (統合)
+**ブロッカー:** 013 (source データ設定), 031 (統合)

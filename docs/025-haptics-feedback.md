@@ -1,20 +1,20 @@
-# 120: Haptics Feedback（Sprint 2）
+# 025: Haptics Feedback（Sprint 2）
 
 ## 概要
 
-**目的:** ユーザー操作に対して触覚フィードバックを提供し、没入感・反応性を向上
+**目的:** PRD に定義されたハプティクスフィードバック（時代境界、LOD トランジション、年→月デフォルト OFF）を実装
 
 **スコープ:**
 
-- Pinch Zoom: 軽いバイブレーション (expo-haptics)
-- Double-Tap: 中程度のバイブレーション
-- Tap on Event: 微小バイブレーション
-- Era picker tap: 軽いバイブレーション
-- Search result tap: 微小バイブレーション
+- 時代境界通過時: Light impact（デフォルト ON）
+- LOD レベル変更時: Selection feedback（デフォルト ON）
+- 年→月カレンダーデフォルト OFF（ユーザー有効化時のみ）
+- Event/Era タップ: Light impact
+- 全操作で設定画面 ON/OFF トグル可能
 
 **成功基準:**
 
-- ✅ 5つのユーザー操作で触覚フィードバック実装
+- ✅ 時代境界・LOD トランジションで触覚フィードバック実装
 - ✅ iOS/Android で統一動作
 - ✅ 設定画面で ON/OFF トグル可能
 - ✅ バッテリー消費 < 1%
@@ -33,24 +33,25 @@ So that アプリの反応が明確に分かり、操作感がより自然にな
 
 ## 受け入れ条件
 
-| #   | 条件                          | 検証方法          | 担当 |
-| --- | ----------------------------- | ----------------- | ---- |
-| 1   | Pinch Zoom 時に軽いバイブ感知 | 実機テスト（iOS） | -    |
-| 2   | Double-Tap 時に中程度バイブ   | 実機テスト（iOS） | -    |
-| 3   | Event タップ時に微小バイブ    | 実機テスト        | -    |
-| 4   | Era picker タップで軽いバイブ | 実機テスト        | -    |
-| 5   | 設定画面で haptics トグル可能 | UI テスト         | -    |
-| 6   | iOS/Android 共存              | 両デバイステスト  | -    |
+| #   | 条件                                  | 検証方法          | 担当 |
+| --- | ------------------------------------- | ----------------- | ---- |
+| 1   | 時代境界通過時に Light impact         | 実機テスト（iOS） | -    |
+| 2   | LOD レベル変更時に Selection feedback | 実機テスト（iOS） | -    |
+| 3   | Event/Era タップ時に Light impact     | 実機テスト        | -    |
+| 4   | 設定画面で haptics トグル可能         | UI テスト         | -    |
+| 5   | 年→月カレンダー OFF（デフォルト）     | 設定確認          | -    |
+| 6   | iOS/Android 共存                      | 両デバイステスト  | -    |
 
 ---
 
 ## 依存関係
 
-| 種類             | 詳細                                                                            |
-| ---------------- | ------------------------------------------------------------------------------- |
-| ✓ 入力依存       | 020 (Settings store で haptics 設定), 040 (Zoom gesture), 030 (Timeline canvas) |
-| ✗ コード依存     | expo-haptics パッケージ                                                         |
-| ✗ 他チケット依存 | 140 (Settings screen 内で ON/OFF トグル)                                        |
+| 種類             | 詳細                                                                                          |
+| ---------------- | --------------------------------------------------------------------------------------------- |
+| ✓ 入力依存       | 014 (Settings store で haptics 設定), 020 (Timeline canvas), 021 (Zoom gesture), 022 (LOD Manager) |
+| ✗ コード依存     | expo-haptics パッケージ                                                                       |
+| ✗ 他チケット依存 | なし                                                                                          |
+| ✓ 出力依存       | 040 (Settings screen)：ON/OFF トグル UI                                                       |
 
 ---
 
@@ -80,7 +81,7 @@ import * as Haptics from "expo-haptics";
 
 ## 実装ガイドライン
 
-### 1. Haptics 設定ストア追加（020 チケット対応）
+### 1. Haptics 設定ストア追加（014 チケット対応）
 
 ```typescript
 // stores/settingsStore.ts
@@ -136,7 +137,7 @@ export async function triggerSelectionHaptic() {
 }
 ```
 
-### 3. Pinch Zoom への統合（040 チケット対応）
+### 3. Pinch Zoom への統合（021 チケット対応）
 
 ```typescript
 // hooks/useZoomGesture.ts
@@ -174,7 +175,7 @@ const doubleTap = Gesture.Tap()
   });
 ```
 
-### 5. Event タップ（030 Timeline Canvas）
+### 5. Event タップ（020 Timeline Canvas）
 
 ```typescript
 // components/TimelineCanvas.tsx
@@ -253,7 +254,7 @@ export function SearchResultItem({ item, onPress }) {
 
 ## Todo リスト
 
-### Phase 1: Settings Store 拡張（020 と連携）
+### Phase 1: Settings Store 拡張（014 と連携）
 
 - [ ] SettingsStore に hapticsEnabled フラグ追加
 - [ ] AsyncStorage で persistence 設定
@@ -277,7 +278,7 @@ export function SearchResultItem({ item, onPress }) {
 
 - [ ] Search result item タップ → triggerMediumHaptic()
 
-### Phase 5: 設定画面との連携（140 チケット対応）
+### Phase 5: 設定画面との連携（040 チケット対応）
 
 - [ ] Settings screen に haptics トグル追加
 - [ ] トグル切り替え → useSettingsStore.setHapticsEnabled()
@@ -295,12 +296,12 @@ export function SearchResultItem({ item, onPress }) {
 
 | 操作                 | 強度      | Haptics API         | 実装場所       | チケット |
 | -------------------- | --------- | ------------------- | -------------- | -------- |
-| Pinch 開始           | Light     | impactAsync(Light)  | ZoomGesture    | 040      |
-| Pinch 終了           | Light     | impactAsync(Light)  | ZoomGesture    | 040      |
-| Double-Tap           | Medium    | impactAsync(Medium) | ZoomGesture    | 040      |
-| Event タップ         | Medium    | impactAsync(Medium) | TimelineCanvas | 030      |
-| Era Picker タップ    | Selection | selectionAsync()    | EraPickerBar   | 060      |
-| Search Result タップ | Medium    | impactAsync(Medium) | SearchScreen   | 080      |
+| Pinch 開始           | Light     | impactAsync(Light)  | ZoomGesture    | 021      |
+| Pinch 終了           | Light     | impactAsync(Light)  | ZoomGesture    | 021      |
+| Double-Tap           | Medium    | impactAsync(Medium) | ZoomGesture    | 021      |
+| Event タップ         | Medium    | impactAsync(Medium) | TimelineCanvas | 020      |
+| Era Picker タップ    | Selection | selectionAsync()    | EraPickerBar   | 023      |
+| Search Result タップ | Medium    | impactAsync(Medium) | SearchScreen   | 030      |
 
 ---
 
@@ -343,4 +344,4 @@ hooks/
 **優先度:** P2
 **推定工数:** 1d
 **ステータス:** Not Started
-**ブロッカー:** 020 (Settings store)
+**ブロッカー:** 014 (Settings store)

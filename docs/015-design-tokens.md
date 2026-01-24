@@ -1,4 +1,4 @@
-# 180: Design Tokens（Sprint 1）
+# 015: Design Tokens（Sprint 1）
 
 ## 概要
 
@@ -47,7 +47,7 @@ So that テーマ変更時に全 UI が統一性を保つ
 
 | 種類             | 詳細                                                |
 | ---------------- | --------------------------------------------------- |
-| ✓ 入力依存       | 020 (Settings store - theme), 190 (Dark theme 実装) |
+| ✓ 入力依存       | 014 (Settings store - theme), 016 (Dark theme 実装) |
 | ✗ コード依存     | なし                                                |
 | ✗ 他チケット依存 | 全コンポーネント（統合対象）                        |
 
@@ -221,6 +221,64 @@ const Z_INDEX = {
 };
 ```
 
+### UI State Tokens（Loading / Error / Empty）
+
+```typescript
+// UI 状態別のスタイル定義
+const UI_STATES = {
+  loading: {
+    spinnerSize: 32,
+    spinnerColor: "primary", // colors.primary を参照
+    overlayOpacity: 0.7,
+    skeletonColor: {
+      dark: "#2D3748",
+      light: "#E2E8F0",
+    },
+  },
+  error: {
+    iconSize: 48,
+    iconColor: "error", // colors.error を参照
+    titleSize: "lg", // typography.size.lg
+    messageSize: "base",
+    retryButtonVariant: "secondary",
+  },
+  empty: {
+    iconSize: 64,
+    iconColor: "textTertiary",
+    titleSize: "lg",
+    messageSize: "base",
+    illustrationMaxWidth: 200,
+  },
+};
+
+// 使用例: Loading Skeleton
+const SKELETON = {
+  borderRadius: 4,
+  shimmerDuration: 1500, // ms
+  colors: {
+    dark: {
+      base: "#2D3748",
+      highlight: "#4A5568",
+    },
+    light: {
+      base: "#E2E8F0",
+      highlight: "#EDF2F7",
+    },
+  },
+};
+```
+
+### UI State コンポーネント仕様
+
+| 状態    | 表示要素                       | 使用場面                         |
+| ------- | ------------------------------ | -------------------------------- |
+| Loading | Spinner + オーバーレイ         | データ取得中、画面遷移時         |
+| Loading | Skeleton プレースホルダー      | リスト、カード読み込み中         |
+| Error   | エラーアイコン + メッセージ    | API エラー、ネットワークエラー   |
+| Error   | Retry ボタン                   | 再試行可能なエラー               |
+| Empty   | イラスト + メッセージ          | 検索結果0件、ブックマーク未登録  |
+| Empty   | CTA ボタン（オプション）       | 「最初のブックマークを追加」等   |
+
 ---
 
 ## 実装ガイドライン
@@ -361,7 +419,7 @@ export function useTokens() {
 }
 ```
 
-### 2. useTheme Hook 統合（190 連携）
+### 2. useTheme Hook 統合（016 連携）
 
 ```typescript
 // hooks/useTheme.ts
@@ -465,11 +523,12 @@ export function getEraColor(eraId: string): string {
 - [ ] Color tokens（Era 15 色 + UI 色）定義
 - [ ] Typography tokens（サイズ、ウェイト、行高）
 - [ ] Spacing, Duration, Z-index tokens
+- [ ] **UI State tokens（Loading / Error / Empty）定義**
 
 ### Phase 2: Hook・ユーティリティ
 
 - [ ] useTokens() hook 実装
-- [ ] useTheme() hook 統合（190 連携）
+- [ ] useTheme() hook 統合（016 連携）
 - [ ] getEraColor() ユーティリティ
 
 ### Phase 3: 全コンポーネント統合
@@ -477,6 +536,13 @@ export function getEraColor(eraId: string): string {
 - [ ] 既存コンポーネント全て tokens 参照に変更
 - [ ] ハードコードされた色・サイズを置き換え
 - [ ] StyleSheet の値を tokens から参照
+
+### Phase 3.5: UI State コンポーネント作成
+
+- [ ] components/ui/LoadingSpinner.tsx
+- [ ] components/ui/LoadingSkeleton.tsx
+- [ ] components/ui/ErrorState.tsx（アイコン + メッセージ + Retry）
+- [ ] components/ui/EmptyState.tsx（イラスト + メッセージ + CTA）
 
 ### Phase 4: Dark/Light テーマ対応
 
@@ -501,26 +567,37 @@ export function getEraColor(eraId: string): string {
 
 ```
 constants/
-└── tokens.ts                # 全 Design Tokens
+└── tokens.ts                # 全 Design Tokens（Color, Typography, Spacing, UI States）
 
 hooks/
 └── useTheme.ts              # Token 参照 hook
 
 utils/
 └── eraColors.ts             # Era カラーマッピング
+
+components/
+└── ui/
+    ├── LoadingSpinner.tsx   # ローディングスピナー
+    ├── LoadingSkeleton.tsx  # スケルトンプレースホルダー
+    ├── ErrorState.tsx       # エラー表示（Retry 付き）
+    └── EmptyState.tsx       # 空状態表示（CTA 付き）
 ```
 
 ---
 
 ## テスト項目
 
-| テスト         | 方法                  | 期待値                     |
-| -------------- | --------------------- | -------------------------- |
-| 色表示         | コンポーネント描画    | 正しい色表示（Dark/Light） |
-| Typography     | テキスト要素          | 適切なサイズ・ウェイト     |
-| Spacing        | レイアウト            | 8px グリッド準拠           |
-| Theme 切り替え | Settings から切り替え | 全体色同時に変更           |
-| Era 色         | Timeline に表示       | Era ごと色分け             |
+| テスト            | 方法                  | 期待値                            |
+| ----------------- | --------------------- | --------------------------------- |
+| 色表示            | コンポーネント描画    | 正しい色表示（Dark/Light）        |
+| Typography        | テキスト要素          | 適切なサイズ・ウェイト            |
+| Spacing           | レイアウト            | 8px グリッド準拠                  |
+| Theme 切り替え    | Settings から切り替え | 全体色同時に変更                  |
+| Era 色            | Timeline に表示       | Era ごと色分け                    |
+| LoadingSpinner    | データ取得中          | スピナー表示、正しい色            |
+| LoadingSkeleton   | リスト読み込み中      | Shimmer アニメーション            |
+| ErrorState        | API エラー時          | エラーアイコン + Retry ボタン     |
+| EmptyState        | 検索結果 0 件         | イラスト + メッセージ表示         |
 
 ---
 

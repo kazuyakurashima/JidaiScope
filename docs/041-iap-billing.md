@@ -1,4 +1,4 @@
-# 150: IAP Billing（Sprint 4）
+# 041: IAP Billing（Sprint 4）
 
 ## 概要
 
@@ -46,11 +46,12 @@ So that 全機能（Emperor/Shogun/Person レイヤー）にアクセスでき�
 
 ## 依存関係
 
-| 種類             | 詳細                                                  |
-| ---------------- | ----------------------------------------------------- |
-| ✓ 入力依存       | 020 (IAP store), 140 (Settings screen), 160 (Paywall) |
-| ✗ コード依存     | react-native-iap, StoreKit 2                          |
-| ✗ 他チケット依存 | なし                                                  |
+| 種類         | 詳細                                                       |
+| ------------ | ---------------------------------------------------------- |
+| ✓ 入力依存   | 014 (appStore の proUnlocked を実装), 040 (Settings screen)|
+| ✗ コード依存 | react-native-iap, StoreKit 2                               |
+| → 順序依存   | 042 (Paywall) は 041 完了後に実装（041 → 042 の片方向）    |
+| ⓘ 拡張対象   | 014 の appStore stub を実際の IAP ロジックに置き換え        |
 
 ---
 
@@ -96,7 +97,7 @@ So that 全機能（Emperor/Shogun/Person レイヤー）にアクセスでき�
 └─────────────────┘
 ```
 
-### IAP Store（020 対応）
+### IAP Store（014 対応）
 
 ```typescript
 interface IAPState {
@@ -194,7 +195,7 @@ export async function getProductsForSale() {
 }
 ```
 
-### 2. IAP Store 実装（020 対応）
+### 2. IAP Store 実装（014 対応）
 
 ```typescript
 // stores/iapStore.ts
@@ -406,7 +407,7 @@ purchaseErrorListener((error) => {
 - [ ] Android: Google Play Console で商品設定
 - [ ] utils/iap.ts で initialization 関数実装
 
-### Phase 2: IAP Store 実装（020 対応）
+### Phase 2: IAP Store 実装（014 対応）
 
 - [ ] useIAPStore 作成（Zustand）
 - [ ] getProductsForSale()
@@ -468,7 +469,7 @@ utils/
 └── iap.ts                  # react-native-iap setup
 
 stores/
-└── iapStore.ts             # IAP 状態管理（020 拡張）
+└── iapStore.ts             # IAP 状態管理（014 拡張）
 
 components/
 └── ProPurchaseButton.tsx   # 購入ボタン
@@ -494,6 +495,6 @@ app/
 
 **作成日:** 2026-01-25
 **優先度:** P1
-**推定工数:** 2d
+**推定工数:** 3d（Sandbox テスト・両プラットフォーム対応含む）
 **ステータス:** Not Started
-**ブロッカー:** 020 (IAP store base)
+**ブロッカー:** 014 (IAP store base)

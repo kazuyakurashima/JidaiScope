@@ -1,4 +1,4 @@
-# 160: Paywall Screen（Sprint 4）
+# 042: Paywall Screen（Sprint 4）
 
 ## 概要
 
@@ -15,9 +15,9 @@
 **成功基準:**
 
 - ✅ Free/Pro 機能比較が見やすく表示
-- ✅ Pro に升级ボタンで 150 IAP フロー へ
+- ✅ Pro に升级ボタンで 041 IAP フロー へ
 - ✅ モーダル形式で組込み可能
-- ✅ 150 チケットと連動
+- ✅ 041 チケットと連動
 
 ---
 
@@ -45,11 +45,11 @@ So that 購入する価値があるか判断できる
 
 ## 依存関係
 
-| 種類             | 詳細                                                      |
-| ---------------- | --------------------------------------------------------- |
-| ✓ 入力依存       | 020 (IAP store), 150 (IAP フロー), 070 (Layer management) |
-| ✗ コード依存     | Reanimated (modal transition)                             |
-| ✗ 他チケット依存 | なし                                                      |
+| 種類         | 詳細                                                     |
+| ------------ | -------------------------------------------------------- |
+| ✓ 入力依存   | 014 (IAP store), 024 (Layer management)                  |
+| ✓ 順序依存   | 041 (IAP Billing) を先に完了後に実装（041 からの片方向） |
+| ✗ コード依存 | Reanimated (modal transition)                            |
 
 ---
 
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
 });
 ```
 
-### 2. Layer 変更時のペイウォール表示（070 連携）
+### 2. Layer 変更時のペイウォール表示（024 連携）
 
 ```typescript
 // stores/layerStore.ts
@@ -460,12 +460,12 @@ export default function TimelineScreen() {
 - [ ] usePaywallStore 作成
 - [ ] showPaywall() / hidePaywall()
 
-### Phase 3: Layer Manager 統合（070 連携）
+### Phase 3: Layer Manager 統合（024 連携）
 
 - [ ] Emperor/Shogun/Person タップ → showPaywall()
 - [ ] Pro 限定層の制御
 
-### Phase 4: 購入フロー統合（150 連携）
+### Phase 4: 購入フロー統合（041 連携）
 
 - [ ] "Pro に升级" ボタンで requestPurchase()
 - [ ] 購入完了後に自動 close
@@ -513,4 +513,4 @@ components/
 **優先度:** P2
 **推定工数:** 1.5d
 **ステータス:** Not Started
-**ブロッカー:** 020 (IAP store), 150 (IAP フロー)
+**ブロッカー:** 014 (IAP store), 041 (IAP フロー)

@@ -1,4 +1,4 @@
-# 030: Timeline Core - TimelineCanvas 基本実装（Sprint 1）
+# 020: Timeline Core - TimelineCanvas 基本実装（Sprint 2）
 
 ## 概要
 
@@ -49,10 +49,10 @@ So that 時間の長さを体感しながら歴史を探索できる
 
 | 種類             | 詳細                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------ |
-| ✓ 入力依存       | 001 Tech Validation (Skia検証), 010 Database, 020 State Management, 180 Design Tokens      |
-| ✗ コード依存     | 040 (Zoom Manager), 050 (LOD Manager) は後続で統合                                         |
+| ✓ 入力依存       | 001 Tech Validation (Skia検証), 012 Database, 014 State Management, 015 Design Tokens      |
+| ✗ コード依存     | 021 (Zoom Manager), 022 (LOD Manager) は後続で統合                                         |
 | ✗ 他チケット依存 | なし                                                                                       |
-| ✓ 出力依存       | 060 (Era Picker), 070 (Layer Management), 120 (Haptics) 等（全タイムライン機能がコア依存） |
+| ✓ 出力依存       | 023 (Era Picker), 024 (Layer Management), 025 (Haptics) 等（全タイムライン機能がコア依存） |
 
 ---
 
@@ -96,8 +96,12 @@ So that 時間の長さを体感しながら歴史を探索できる
 ### Phase 5: インタラクション
 
 - [ ] タップ検出ロジック（ヒット領域計算）
-  - [ ] イベント : 16pt 円形のヒット領域
+  - [ ] イベント : 44pt 円形のヒット領域（アクセシビリティ対応）
   - [ ] 時代帯 : タップ時に Era 情報取得
+- [ ] 長押しプレビュー機能（PRD 要件）
+  - [ ] 200ms 以上長押し → イベント簡易プレビュー表示
+  - [ ] ツールチップ：イベント名 + 日付
+  - [ ] 指を離すと消える
 - [ ] タップ → EventDetail 画面遷移
   - [ ] useRouter().push(`/event/${eventId}`)
 - [ ] スクロール検出（PanGestureHandler）
@@ -305,9 +309,9 @@ domain/
 
 ## 次のステップ
 
-- ✅ 030 完了 → チケット 040 (Zoom Manager) 統合開始
-- ✅ 030 完了 → チケット 050 (LOD Manager) 統合開始
-- ✅ 030 完了 → チケット 060 (Era Picker) 統合開始
+- ✅ 020 完了 → チケット 021 (Zoom Manager) 統合開始
+- ✅ 020 完了 → チケット 022 (LOD Manager) 統合開始
+- ✅ 020 完了 → チケット 023 (Era Picker) 統合開始
 
 ---
 
@@ -315,4 +319,4 @@ domain/
 **優先度:** P0 - Critical
 **推定工数:** 3d
 **ステータス:** Not Started
-**ブロッカー:** 010, 020 完了
+**ブロッカー:** 012, 014 完了

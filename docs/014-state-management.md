@@ -1,4 +1,4 @@
-# 020: State Management - Zustand Store（Sprint 1）
+# 014: State Management - Zustand Store（Sprint 1）
 
 ## 概要
 
@@ -9,7 +9,7 @@
 - timelineStore（ズーム、スクロール位置、LOD）
 - searchStore（検索履歴、検索結果キャッシュ）
 - bookmarkStore（ブックマーク一覧、ローカルストレージ同期）
-- iapStore（購入状態、Pro ロック機能管理）
+- appStore（Pro 状態スタブ、アプリ全体状態）← **Sprint 1 で stub 実装、Sprint 4 で IAP 連携**
 - settingsStore（ハプティクス、テーマ、レイヤー設定）
 
 **成功基準:**
@@ -36,6 +36,7 @@ So that コンポーネント間の状態共有がスムーズで保守性が高
 | #   | 条件                                       | 検証方法                       | 担当 |
 | --- | ------------------------------------------ | ------------------------------ | ---- |
 | 1   | 5 つのストアが完成し、アクセス可能         | import { useTimelineStore } 等 | -    |
+| ★   | appStore の proUnlocked stub が動作        | useAppStore().proUnlocked 確認 | -    |
 | 2   | 状態更新が UI 遅延なし（< 1フレーム）      | React DevTools Profiler        | -    |
 | 3   | bookmarkStore が AsyncStorage と双方向同期 | デバイス再起動後も保持         | -    |
 | 4   | iapStore が購入状態を正しく管理            | Free/Pro 表示の切り替え確認    | -    |
@@ -50,7 +51,8 @@ So that コンポーネント間の状態共有がスムーズで保守性が高
 | ✗ 入力依存       | なし                                                                                            |
 | ✗ コード依存     | なし                                                                                            |
 | ✗ 他チケット依存 | なし                                                                                            |
-| ✓ 出力依存       | チケット 030 (Timeline Core), 080 (Search), 130 (Bookmarks), 150 (IAP) 等（全画面がストア依存） |
+| ✓ 出力依存       | 020 (Timeline), 024 (Layer), 030 (Search), 034 (Bookmarks) 等（全画面がストア依存）|
+| ⓘ 拡張予定       | 041 (IAP, Sprint 4) で appStore を拡張し、実際の課金ロジックを追加 |
 
 ---
 
@@ -67,9 +69,10 @@ So that コンポーネント間の状態共有がスムーズで保守性が高
 - [ ] bookmarkStore
   - [ ] State: { bookmarks (id[], max 100) }
   - [ ] Actions: { addBookmark, removeBookmark, getBookmarks }
-- [ ] iapStore
-  - [ ] State: { isPro, purchaseStatus, receiptData }
-  - [ ] Actions: { setPro, setPurchaseStatus }
+- [ ] appStore **← Sprint 1 で stub 実装**
+  - [ ] State: { proUnlocked: boolean }（デフォルト false、Sprint 4 で IAP 連携）
+  - [ ] Actions: { setProUnlocked }
+  - [ ] **注意:** Sprint 4 (041 IAP) で実際の課金連携を実装。Sprint 1 では stub のみ
 - [ ] settingsStore
   - [ ] State: { hapticEnabled, theme, visibleLayers }
   - [ ] Actions: { toggleHaptic, setTheme, toggleLayer }
@@ -79,19 +82,19 @@ So that コンポーネント間の状態共有がスムーズで保守性が高
 - [ ] stores/timelineStore.ts 実装
 - [ ] stores/searchStore.ts 実装
 - [ ] stores/bookmarkStore.ts 実装
-- [ ] stores/iapStore.ts 実装
+- [ ] stores/appStore.ts 実装 **← Pro stub**
 - [ ] stores/settingsStore.ts 実装
 
 ### Phase 3: ローカルストレージ連携
 
 - [ ] bookmarkStore ↔ AsyncStorage 自動同期
 - [ ] settingsStore ↔ AsyncStorage 自動同期
-- [ ] iapStore ↔ SecureStore 連携（レシート保存）
+- [ ] appStore は Sprint 1 では stub のみ（SecureStore 連携は Sprint 4 で 041 IAP 実装時）
 
 ### Phase 4: 型定義
 
 - [ ] types/Store.ts
-  - [ ] TimelineState, SearchState, BookmarkState, IAPState, SettingsState
+  - [ ] TimelineState, SearchState, BookmarkState, AppState, SettingsState
 
 ### Phase 5: テスト
 
@@ -205,6 +208,34 @@ export const useBookmarkStore = create<BookmarkState>((set) => {
 });
 ```
 
+### AppStore（Pro stub）パターン
+
+```typescript
+// stores/appStore.ts
+// Sprint 1: Pro 状態の stub 実装
+// Sprint 4 (041 IAP) で実際の課金ロジックと連携
+
+import { create } from "zustand";
+
+interface AppState {
+  proUnlocked: boolean;
+  setProUnlocked: (unlocked: boolean) => void;
+}
+
+export const useAppStore = create<AppState>((set) => ({
+  // Sprint 1: デフォルト false（Free ユーザー）
+  // 開発時は true にして Pro 機能をテスト可能
+  proUnlocked: false,
+
+  setProUnlocked: (unlocked) => set({ proUnlocked: unlocked }),
+}));
+
+// 使用例: Layer 制限チェック
+export function useIsPro() {
+  return useAppStore((s) => s.proUnlocked);
+}
+```
+
 ### コンポーネント統合例
 
 ```typescript
@@ -234,8 +265,8 @@ stores/
 ├── timelineStore.ts      # ズーム、LOD、Era選択
 ├── searchStore.ts        # 検索キャッシュ
 ├── bookmarkStore.ts      # ブックマーク（AsyncStorage同期）
-├── iapStore.ts          # 購入状態
-└── settingsStore.ts     # ユーザー設定
+├── appStore.ts           # Pro 状態 stub（Sprint 4 で IAP 連携）
+└── settingsStore.ts      # ユーザー設定
 
 types/
 └── store.ts             # 全Store型定義
@@ -249,13 +280,13 @@ types/
 
 - [ ] setZoom → zoomLevel 更新
 - [ ] addBookmark → 最大100件までカウント
-- [ ] setPro → isPro フラグ変更
+- [ ] setProUnlocked → proUnlocked フラグ変更
 - [ ] toggleLayer → visibleLayers 更新
 
 ### 統合テスト
 
 - [ ] bookmarkStore 追加 → AsyncStorage 保存 → 再起動 → 復元
-- [ ] iapStore Pro 設定 → 各スクリーンで Pro 制限が反映
+- [ ] appStore proUnlocked 設定 → 各スクリーンで Pro 制限が反映
 
 ### パフォーマンステスト
 
@@ -281,8 +312,8 @@ types/
 
 ## 次のステップ
 
-- ✅ 020 完了 → チケット 030 (Timeline Core) で useTimelineStore 統合
-- ✅ 020 完了 → チケット 080 (Search) で useSearchStore 統合
+- ✅ 014 完了 → チケット 020 (Timeline Core) で useTimelineStore 統合
+- ✅ 014 完了 → チケット 030 (Search) で useSearchStore 統合
 
 ---
 

@@ -1,4 +1,4 @@
-# 100: Person Detail Screen（Sprint 2）
+# 032: Person Detail Screen（Sprint 3）
 
 ## 概要
 
@@ -46,7 +46,7 @@ So that 1人の人物から歴史の流れを理解できる
 
 | 種類         | 詳細                               |
 | ------------ | ---------------------------------- |
-| ✓ 入力依存   | 010 (Database), 090 (Event Detail) |
+| ✓ 入力依存   | 012 (Database), 031 (Event Detail) |
 | ✗ コード依存 | なし                               |
 | ✓ 出力依存   | なし                               |
 
@@ -277,4 +277,4 @@ export async function getEventsByPersonId(personId: string): Promise<Event[]> {
 **優先度:** P0
 **推定工数:** 1.5d
 **ステータス:** Not Started
-**ブロッカー:** 010, 090 完了
+**ブロッカー:** 012, 031 完了

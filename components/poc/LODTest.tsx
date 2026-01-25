@@ -30,7 +30,7 @@ import {
   withTiming,
   useFrameCallback,
 } from 'react-native-reanimated';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Transforms3d } from '@shopify/react-native-skia';
 import { triggerLODHaptic, type LODLevel } from '../../utils/haptics';
 
@@ -112,6 +112,25 @@ export function LODTest({
 
   // タイマー競合対策: previousLOD クリア用タイマーID
   const previousLODTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Date.now 依存の統計表示を更新するための now state（500ms 毎に更新）
+  const [now, setNow] = useState(Date.now());
+
+  // アンマウント時のクリーンアップ + now 更新用 interval
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 500);
+
+    return () => {
+      clearInterval(interval);
+      // previousLODTimer のクリーンアップ（アンマウント時の setState 防止）
+      if (previousLODTimerRef.current !== null) {
+        clearTimeout(previousLODTimerRef.current);
+        previousLODTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // フレーム基準の LOD 遷移計測用 SharedValue
   // lodChangeAt: LOD 変更時刻（performance.now()）、0 = 計測待ちなし
@@ -314,7 +333,7 @@ export function LODTest({
   const derivedL2Opacity = useDerivedValue(() => l2Opacity.value);
   const derivedL3Opacity = useDerivedValue(() => l3Opacity.value);
 
-  // スケール変換用（中心基準でスケール）
+  // スケール変換用（原点基準でスケール: Group 全体に適用）
   const derivedL1Transform = useDerivedValue<Transforms3d>(() => [
     { scale: l1Scale.value },
   ]);
@@ -473,9 +492,9 @@ export function LODTest({
     ? ((completedFrames.filter(t => t.frameMs < 100).length / completedFrames.length) * 100).toFixed(0)
     : '-';
 
-  // ハプティクス統計（成功/失敗を分離）
+  // ハプティクス統計（成功/失敗を分離）- now state で定期更新
   const completedHaptics = transitions.filter(t => t.hapticMs >= 0);  // 成功分
-  const failedHaptics = transitions.filter(t => t.hapticMs === -1 && t.timestamp < Date.now() - 1000);  // 1秒以上経過した失敗分
+  const failedHaptics = transitions.filter(t => t.hapticMs === -1 && t.timestamp < now - 1000);  // 1秒以上経過した失敗分
 
   const avgHapticMs = completedHaptics.length > 0
     ? (completedHaptics.reduce((sum, t) => sum + t.hapticMs, 0) / completedHaptics.length).toFixed(1)
@@ -492,9 +511,9 @@ export function LODTest({
     ? ((completedHaptics.filter(t => t.hapticMs < 50).length / completedHaptics.length) * 100).toFixed(0)
     : '-';
 
-  // 未計測の遷移数（frameMs または hapticMs が未完了）
+  // 未計測の遷移数（frameMs または hapticMs が未完了）- now state で定期更新
   const pendingCount = transitions.filter(t =>
-    t.frameMs === -1 || (t.hapticMs === -1 && t.timestamp >= Date.now() - 1000)
+    t.frameMs === -1 || (t.hapticMs === -1 && t.timestamp >= now - 1000)
   ).length;
 
   return (

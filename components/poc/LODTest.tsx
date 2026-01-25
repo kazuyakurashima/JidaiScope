@@ -3,7 +3,7 @@
  *
  * 検証項目:
  * 1. LOD L0→L1→L2→L3 の段階的切替
- * 2. LOD切替時間 < 100ms
+ * 2. LOD切替時間 < 100ms（フレーム基準: useFrameCallback で計測）
  * 3. ハプティクス応答 < 50ms
  * 4. 滑らかな遷移（カクツキなし）
  *
@@ -12,6 +12,11 @@
  * - L1 (x2-x10): 時代帯 + 主要イベント (大きいマーカー)
  * - L2 (x10-x50): + 中規模イベント + 時代ラベル
  * - L3 (x50-x100): + 小イベント + 年マーカー + 詳細ラベル
+ *
+ * アニメーション仕様:
+ * - 遷移方式: フェードのみ（200ms withTiming）
+ * - スケールアニメーション: なし（PoC では実装せず）
+ * - 描画最適化: 遷移中は currentLOD + previousLOD のみ描画
  */
 
 import { Canvas, Rect, Circle, Group, Text, useFont, Line, vec } from '@shopify/react-native-skia';
@@ -23,6 +28,7 @@ import {
   runOnJS,
   useAnimatedReaction,
   withTiming,
+  useFrameCallback,
 } from 'react-native-reanimated';
 import { useState, useCallback, useRef } from 'react';
 import type { Transforms3d } from '@shopify/react-native-skia';
@@ -53,7 +59,8 @@ interface LODTransition {
   id: number;
   fromLevel: LODLevel;
   toLevel: LODLevel;
-  stateUpdateMs: number;   // LOD状態更新にかかった時間
+  stateUpdateMs: number;   // LOD状態更新にかかった時間（setState呼び出し）
+  frameMs: number;         // フレーム描画にかかった時間（-1 = 未計測）
   hapticMs: number;        // ハプティクス応答時間（-1 = 未完了/失敗）
   timestamp: number;
 }
@@ -87,12 +94,20 @@ export function LODTest({
 
   // LOD 状態
   const currentLODRef = useRef<LODLevel>(0);
+  const previousLODRef = useRef<LODLevel>(0);  // 遷移中の前LOD（フェード中の描画用）
   const [currentLOD, setCurrentLOD] = useState<LODLevel>(0);
+  const [previousLOD, setPreviousLOD] = useState<LODLevel>(0);  // フェード中は前LODも描画
   const [currentZoom, setCurrentZoom] = useState(1);
 
   // 計測結果
   const [transitions, setTransitions] = useState<LODTransition[]>([]);
   const transitionIdRef = useRef(0);
+
+  // フレーム基準の LOD 遷移計測用 SharedValue
+  // lodChangeAt: LOD 変更時刻（performance.now()）、0 = 計測待ちなし
+  // pendingTransitionId: 計測待ちの遷移ID
+  const lodChangeAt = useSharedValue(0);
+  const pendingTransitionId = useSharedValue(0);
 
   // LOD 変更ハンドラー（競合防止: 状態更新を先に確定、ハプティクスは非同期追随）
   const handleLODChange = useCallback((newLOD: LODLevel, zoomLevel: number) => {
@@ -101,32 +116,47 @@ export function LODTest({
 
     const startTime = performance.now();
 
+    // 遷移中の前LODを記録（フェードアウト中も描画するため）
+    previousLODRef.current = prevLOD;
+    setPreviousLOD(prevLOD);
+
     // 先に状態を確定（同期的）
     currentLODRef.current = newLOD;
     setCurrentLOD(newLOD);
     setCurrentZoom(zoomLevel);
 
-    // LOD 別 opacity アニメーション（滑らかな遷移）
+    // LOD 別 opacity アニメーション（滑らかな遷移、フェードのみ）
     l1Opacity.value = withTiming(newLOD >= 1 ? 1 : 0, { duration: ANIM_DURATION });
     l2Opacity.value = withTiming(newLOD >= 2 ? 1 : 0, { duration: ANIM_DURATION });
     l3Opacity.value = withTiming(newLOD >= 3 ? 1 : 0, { duration: ANIM_DURATION });
+
+    // アニメーション完了後に前LODをクリア（描画削減）
+    setTimeout(() => {
+      previousLODRef.current = newLOD;
+      setPreviousLOD(newLOD);
+    }, ANIM_DURATION + 50); // +50ms マージン
 
     const stateUpdateMs = performance.now() - startTime;
 
     // 遷移IDを発行（古い遷移の結果を無視するため）
     const transitionId = ++transitionIdRef.current;
 
-    // 初期の遷移記録を追加（ハプティクスは未完了）
+    // 初期の遷移記録を追加（frameMs, hapticMsは未完了）
     const transition: LODTransition = {
       id: transitionId,
       fromLevel: prevLOD,
       toLevel: newLOD,
       stateUpdateMs,
+      frameMs: -1, // 未計測
       hapticMs: -1, // 未完了
       timestamp: Date.now(),
     };
 
     setTransitions(prev => [...prev.slice(-9), transition]);
+
+    // フレーム計測開始（useFrameCallback で最初のフレームを検出）
+    lodChangeAt.value = performance.now();
+    pendingTransitionId.value = transitionId;
 
     // ハプティクスを非同期で発火（LOD更新をブロックしない）
     triggerLODHaptic(prevLOD, newLOD).then((hapticMs) => {
@@ -139,9 +169,37 @@ export function LODTest({
         );
       });
     });
-  // Note: l1Opacity, l2Opacity, l3Opacity are stable SharedValue refs (Reanimated)
+  // Note: l1Opacity, l2Opacity, l3Opacity, lodChangeAt, pendingTransitionId are stable SharedValue refs
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // フレーム計測用コールバック: LOD変更後の最初のフレームで frameMs を確定
+  const updateFrameMs = useCallback((transitionId: number, frameMs: number) => {
+    setTransitions(prev => {
+      const exists = prev.some(t => t.id === transitionId);
+      if (!exists) return prev;
+      return prev.map(t =>
+        t.id === transitionId ? { ...t, frameMs } : t
+      );
+    });
+  }, []);
+
+  useFrameCallback(() => {
+    'worklet';
+    // 計測待ちがなければスキップ
+    if (lodChangeAt.value === 0) return;
+
+    // 最初のフレームで frameMs を計測
+    const frameMs = performance.now() - lodChangeAt.value;
+    const transitionId = pendingTransitionId.value;
+
+    // 計測完了: SharedValue をリセット
+    lodChangeAt.value = 0;
+    pendingTransitionId.value = 0;
+
+    // JS スレッドに結果を通知
+    runOnJS(updateFrameMs)(transitionId, frameMs);
+  }, true);
 
   // ズーム変更時の LOD 計算
   useAnimatedReaction(
@@ -373,10 +431,18 @@ export function LODTest({
     return labels;
   };
 
-  // 統計計算（LOD状態更新とハプティクスを分離）
-  const avgStateUpdateMs = transitions.length > 0
-    ? (transitions.reduce((sum, t) => sum + t.stateUpdateMs, 0) / transitions.length).toFixed(1)
-    : '0.0';
+  // 統計計算（State更新、Frame描画、Hapticsを分離）
+
+  // フレーム計測完了分（frameMs >= 0）
+  const completedFrames = transitions.filter(t => t.frameMs >= 0);
+  const avgFrameMs = completedFrames.length > 0
+    ? (completedFrames.reduce((sum, t) => sum + t.frameMs, 0) / completedFrames.length).toFixed(1)
+    : '-';
+
+  // フレーム描画が100ms以下の割合
+  const frameUnder100msRate = completedFrames.length > 0
+    ? ((completedFrames.filter(t => t.frameMs < 100).length / completedFrames.length) * 100).toFixed(0)
+    : '-';
 
   // ハプティクス統計（成功/失敗を分離）
   const completedHaptics = transitions.filter(t => t.hapticMs >= 0);  // 成功分
@@ -390,17 +456,12 @@ export function LODTest({
   const resolvedHaptics = completedHaptics.length + failedHaptics.length;
   const hapticSuccessRate = resolvedHaptics > 0
     ? ((completedHaptics.length / resolvedHaptics) * 100).toFixed(0)
-    : '100';
-
-  // LOD状態更新が100ms以下の割合
-  const stateUnder100msRate = transitions.length > 0
-    ? ((transitions.filter(t => t.stateUpdateMs < 100).length / transitions.length) * 100).toFixed(0)
-    : '0';
+    : '-';  // 初期値は '-' 表記
 
   // ハプティクスが50ms以下の割合（成功分のみ）
   const hapticUnder50msRate = completedHaptics.length > 0
     ? ((completedHaptics.filter(t => t.hapticMs < 50).length / completedHaptics.length) * 100).toFixed(0)
-    : '0';
+    : '-';
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -440,23 +501,29 @@ export function LODTest({
                 color="#4FD1C5"
               />
 
-              {/* 主要イベント (L1+) - フェードアニメーション */}
-              <Group opacity={derivedL1Opacity}>
-                {renderMajorEvents()}
-              </Group>
+              {/* 主要イベント (L1+) - フェードアニメーション、条件付き描画 */}
+              {(currentLOD >= 1 || previousLOD >= 1) && (
+                <Group opacity={derivedL1Opacity}>
+                  {renderMajorEvents()}
+                </Group>
+              )}
 
-              {/* 中規模イベント + 時代ラベル (L2+) - フェードアニメーション */}
-              <Group opacity={derivedL2Opacity}>
-                {renderMediumEvents()}
-                {renderEraLabels()}
-              </Group>
+              {/* 中規模イベント + 時代ラベル (L2+) - フェードアニメーション、条件付き描画 */}
+              {(currentLOD >= 2 || previousLOD >= 2) && (
+                <Group opacity={derivedL2Opacity}>
+                  {renderMediumEvents()}
+                  {renderEraLabels()}
+                </Group>
+              )}
 
-              {/* 小イベント + 年マーカー + 詳細ラベル (L3) - フェードアニメーション */}
-              <Group opacity={derivedL3Opacity}>
-                {renderSmallEvents()}
-                {renderYearMarkers()}
-                {renderDetailLabels()}
-              </Group>
+              {/* 小イベント + 年マーカー + 詳細ラベル (L3) - フェードアニメーション、条件付き描画 */}
+              {(currentLOD >= 3 || previousLOD >= 3) && (
+                <Group opacity={derivedL3Opacity}>
+                  {renderSmallEvents()}
+                  {renderYearMarkers()}
+                  {renderDetailLabels()}
+                </Group>
+              )}
             </Group>
           </Canvas>
         </View>
@@ -485,15 +552,15 @@ export function LODTest({
           <RNText style={styles.statValue}>{transitions.length}回</RNText>
         </View>
         <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>State</RNText>
-          <RNText style={[styles.statValue, parseFloat(avgStateUpdateMs) < 100 && styles.passValue]}>
-            {avgStateUpdateMs}ms
+          <RNText style={styles.statLabel}>Frame</RNText>
+          <RNText style={[styles.statValue, avgFrameMs !== '-' && parseFloat(avgFrameMs) < 100 && styles.passValue]}>
+            {avgFrameMs}ms
           </RNText>
         </View>
         <View style={styles.statItem}>
           <RNText style={styles.statLabel}>&lt;100ms</RNText>
-          <RNText style={[styles.statValue, parseFloat(stateUnder100msRate) >= 95 && styles.passValue]}>
-            {stateUnder100msRate}%
+          <RNText style={[styles.statValue, frameUnder100msRate !== '-' && parseFloat(frameUnder100msRate) >= 95 && styles.passValue]}>
+            {frameUnder100msRate}%
           </RNText>
         </View>
         <View style={styles.statItem}>
@@ -504,13 +571,13 @@ export function LODTest({
         </View>
         <View style={styles.statItem}>
           <RNText style={styles.statLabel}>&lt;50ms</RNText>
-          <RNText style={[styles.statValue, parseFloat(hapticUnder50msRate) >= 95 && styles.passValue]}>
+          <RNText style={[styles.statValue, hapticUnder50msRate !== '-' && parseFloat(hapticUnder50msRate) >= 95 && styles.passValue]}>
             {hapticUnder50msRate}%
           </RNText>
         </View>
         <View style={styles.statItem}>
           <RNText style={styles.statLabel}>成功率</RNText>
-          <RNText style={[styles.statValue, parseFloat(hapticSuccessRate) >= 90 && styles.passValue]}>
+          <RNText style={[styles.statValue, hapticSuccessRate !== '-' && parseFloat(hapticSuccessRate) >= 90 && styles.passValue]}>
             {hapticSuccessRate}%
           </RNText>
         </View>

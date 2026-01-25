@@ -8,23 +8,27 @@
  * 4. フォーカルポイント追従
  */
 
-import { Canvas, Rect, Circle, Group, Text, useFont } from '@shopify/react-native-skia';
+import { Canvas, Rect, Circle, Group } from '@shopify/react-native-skia';
 import { View, StyleSheet, Dimensions, Text as RNText } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, {
+import {
   useSharedValue,
-  useAnimatedStyle,
   withSpring,
   runOnJS,
+  useFrameCallback,
+  useAnimatedReaction,
 } from 'react-native-reanimated';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import * as Haptics from 'expo-haptics';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ズーム制限
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 100;
+
+// フレームドロップ閾値 (16.67ms * 1.5 = 25ms 以上でドロップ判定)
+const FRAME_DROP_THRESHOLD_MS = 25;
 
 // 時代カラー（簡略版）
 const ERA_COLORS = ['#8B7355', '#D4A574', '#9370DB', '#4682B4', '#DC143C', '#4169E1', '#228B22'];
@@ -43,72 +47,128 @@ export function PinchZoomTest({
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
-  const focalX = useSharedValue(0);
+  const savedFocalX = useSharedValue(0);
+
+  // フレームドロップ計測用 shared values
+  const frameDrops = useSharedValue(0);
+  const totalFrames = useSharedValue(0);
 
   // UI表示用の状態
   const [currentZoom, setCurrentZoom] = useState(1);
-  const [frameDropCount, setFrameDropCount] = useState(0);
+  const [frameStats, setFrameStats] = useState({ drops: 0, total: 0, rate: '0.0' });
 
-  // ズームレベル更新（UIスレッド）
-  const updateZoomDisplay = useCallback((newZoom: number) => {
-    setCurrentZoom(Math.round(newZoom * 100) / 100);
+  // フレームコールバックでドロップ検出（timeSincePreviousFrame使用）
+  useFrameCallback((frameInfo) => {
+    'worklet';
+    // timeSincePreviousFrame: 前フレームからの経過時間(ms)、初回はnull
+    const delta = frameInfo.timeSincePreviousFrame;
+
+    // nullチェック + 初回フレームはスキップ（異常値除外）
+    if (delta !== null && delta > 0 && delta < 1000) {
+      totalFrames.value++;
+
+      // 25ms以上（60fpsの1.5倍）ならドロップとみなす
+      if (delta > FRAME_DROP_THRESHOLD_MS) {
+        frameDrops.value++;
+      }
+    }
+  }, true);
+
+  // フレーム統計を定期的にUI更新（1秒毎）
+  // Note: shared values (frameDrops, totalFrames) は安定参照のため依存配列に含めない
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const drops = frameDrops.value;
+      const total = totalFrames.value;
+      const rate = total > 0 ? ((drops / total) * 100).toFixed(1) : '0.0';
+      setFrameStats({ drops, total, rate });
+    }, 1000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ハプティクスフィードバック
-  const triggerHaptic = useCallback(() => {
+  // ズーム表示更新（スロットリング: 0.1単位で変化時のみ）
+  useAnimatedReaction(
+    () => Math.round(scale.value * 10) / 10,
+    (current, previous) => {
+      'worklet';
+      if (current !== previous && previous !== null) {
+        runOnJS(setCurrentZoom)(current);
+      }
+    }
+  );
+
+  // ハプティクスフィードバック（Light: ピンチ終了、Medium: ダブルタップ）
+  const triggerLightHaptic = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
-  // ピンチジェスチャー
+  const triggerMediumHaptic = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, []);
+
+  // ピンチジェスチャー（フォーカルポイント: 開始位置固定方式）
+  // 仕様: ジェスチャー開始時のfocalXを基準に、累積的なスケール変化を計算
+  // - 開始位置固定: ピンチ中に指が移動しても、最初のfocalXを原点として維持
+  // - 安定性重視: フレーム間の誤差蓄積を防ぎ、予測可能なズーム動作を実現
+  // Note: 動的追従（指の移動に追従）が必要な場合は event.focalX を使用する方式に変更可能
   const pinchGesture = Gesture.Pinch()
-    .onStart(() => {
+    .onStart((event) => {
+      'worklet';
       savedScale.value = scale.value;
+      savedTranslateX.value = translateX.value;
+      savedFocalX.value = event.focalX;
     })
     .onUpdate((event) => {
-      // スケール計算（フォーカルポイント考慮）
+      'worklet';
       const newScale = Math.min(
         Math.max(savedScale.value * event.scale, MIN_ZOOM),
         MAX_ZOOM
       );
-      scale.value = newScale;
-      focalX.value = event.focalX;
 
-      // UIスレッドで表示更新
-      runOnJS(updateZoomDisplay)(newScale);
+      // フォーカルポイント追従: ジェスチャー開始時のfocalXを基準にスケーリング
+      // scaleDiff = newScale / savedScale（開始時基準、誤差蓄積なし）
+      const scaleDiff = newScale / savedScale.value;
+      const focalPoint = savedFocalX.value;
+
+      // 開始時のtranslateXを基準に変換量を計算（安定性重視）
+      translateX.value = savedTranslateX.value - (focalPoint - savedTranslateX.value) * (scaleDiff - 1);
+
+      scale.value = newScale;
     })
     .onEnd(() => {
-      // スプリングアニメーションで自然な減衰
+      'worklet';
       savedScale.value = scale.value;
-
-      // ズーム完了時のハプティクス
-      runOnJS(triggerHaptic)();
+      runOnJS(triggerLightHaptic)();
     });
 
   // パンジェスチャー（横スクロール）
   const panGesture = Gesture.Pan()
     .onStart(() => {
+      'worklet';
       savedTranslateX.value = translateX.value;
     })
     .onUpdate((event) => {
+      'worklet';
       translateX.value = savedTranslateX.value + event.translationX;
     })
     .onEnd(() => {
+      'worklet';
       savedTranslateX.value = translateX.value;
     });
 
-  // ダブルタップで2倍ズーム
+  // ダブルタップで2倍ズーム（Medium haptic）
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
-    .onEnd((event) => {
+    .onEnd(() => {
+      'worklet';
       const newScale = scale.value < 2 ? 2 : 1;
       scale.value = withSpring(newScale, {
         damping: 15,
         stiffness: 150,
       });
       savedScale.value = newScale;
-
-      runOnJS(updateZoomDisplay)(newScale);
-      runOnJS(triggerHaptic)();
+      runOnJS(triggerMediumHaptic)();
     });
 
   // ジェスチャー合成
@@ -188,10 +248,10 @@ export function PinchZoomTest({
       {/* ズーム情報表示 */}
       <View style={styles.infoBar}>
         <RNText style={styles.infoText}>
-          Zoom: x{currentZoom.toFixed(2)}
+          Zoom: x{currentZoom.toFixed(1)}
         </RNText>
         <RNText style={styles.infoText}>
-          Target: 60fps | Drops: {frameDropCount}
+          Drops: {frameStats.drops} ({frameStats.rate}%)
         </RNText>
       </View>
 

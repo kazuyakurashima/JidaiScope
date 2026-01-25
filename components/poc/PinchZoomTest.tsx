@@ -13,11 +13,13 @@ import { View, StyleSheet, Dimensions, Text as RNText } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   useSharedValue,
+  useDerivedValue,
   withSpring,
   runOnJS,
   useFrameCallback,
   useAnimatedReaction,
 } from 'react-native-reanimated';
+import type { Transforms3d } from '@shopify/react-native-skia';
 import { useState, useCallback, useEffect } from 'react';
 import * as Haptics from 'expo-haptics';
 
@@ -178,6 +180,14 @@ export function PinchZoomTest({
     doubleTapGesture
   );
 
+  // Skia 変換行列（useDerivedValue で SharedValue を追跡）
+  // Note: SharedValue を直接 transform に渡すと Skia が追跡できないため、
+  // useDerivedValue で UI スレッド駆動にする
+  const transform = useDerivedValue<Transforms3d>(() => [
+    { translateX: translateX.value },
+    { scale: scale.value },
+  ]);
+
   // タイムラインコンテンツの幅（ズームに応じて変化）
   const contentWidth = width * 10; // 基本幅 x 10
 
@@ -259,12 +269,7 @@ export function PinchZoomTest({
       <GestureDetector gesture={composedGesture}>
         <View style={styles.canvasContainer}>
           <Canvas style={{ width, height }}>
-            <Group
-              transform={[
-                { translateX: translateX.value },
-                { scale: scale.value },
-              ]}
-            >
+            <Group transform={transform}>
               {/* 背景 */}
               <Rect
                 x={0}

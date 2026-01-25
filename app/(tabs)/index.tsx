@@ -5,17 +5,19 @@
  * 検証項目:
  * - Day 1: Skia + Expo SDK 54 互換性、ピンチズーム 60fps
  * - Day 2: LOD 切替、ハプティクス応答時間
+ * - Day 3: 密集描画 (350events)、ビューポートカリング
  */
 
 import { useState } from 'react';
 import { StyleSheet, View, Text, SafeAreaView, StatusBar, TouchableOpacity } from 'react-native';
 import { PinchZoomTest } from '@/components/poc/PinchZoomTest';
 import { LODTest } from '@/components/poc/LODTest';
+import { DenseRenderTest } from '@/components/poc/DenseRenderTest';
 
-type TestMode = 'pinch' | 'lod';
+type TestMode = 'pinch' | 'lod' | 'dense';
 
 export default function TimelineScreen() {
-  const [testMode, setTestMode] = useState<TestMode>('lod');
+  const [testMode, setTestMode] = useState<TestMode>('dense');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -44,12 +46,22 @@ export default function TimelineScreen() {
               Day 2: LOD
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleButton, testMode === 'dense' && styles.activeToggle]}
+            onPress={() => setTestMode('dense')}
+          >
+            <Text style={[styles.toggleText, testMode === 'dense' && styles.activeToggleText]}>
+              Day 3: Dense
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
       {/* タイムライン PoC */}
       <View style={styles.timelineContainer}>
-        {testMode === 'pinch' ? <PinchZoomTest /> : <LODTest />}
+        {testMode === 'pinch' && <PinchZoomTest />}
+        {testMode === 'lod' && <LODTest />}
+        {testMode === 'dense' && <DenseRenderTest />}
       </View>
     </SafeAreaView>
   );
@@ -79,6 +91,7 @@ const styles = StyleSheet.create({
   },
   toggleContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginTop: 12,
     gap: 8,
   },

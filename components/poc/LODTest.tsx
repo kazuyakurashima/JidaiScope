@@ -17,6 +17,10 @@
  * - 遷移方式: フェード + スケール（200ms withTiming）
  * - スケール: 0.95 → 1.0（出現時）、1.0 → 0.95（消失時）
  * - 描画最適化: 遷移中は currentLOD + previousLOD のみ描画
+ *
+ * 計測仕様:
+ * - LOD切替時間: 初回フレーム到達までの時間（アニメ完了時間ではない）
+ * - 連続遷移: 同フレーム内で連続変更時、先行遷移は「スキップ」扱い (frameMs = -2)
  */
 
 import { Canvas, Rect, Circle, Group, Text, useFont, Line, vec } from '@shopify/react-native-skia';
@@ -55,12 +59,16 @@ const ERA_COLORS = ['#8B7355', '#D4A574', '#9370DB', '#4682B4', '#DC143C', '#416
 const ERA_NAMES = ['Jomon', 'Yayoi', 'Heian', 'Kamakura', 'Sengoku', 'Edo', 'Meiji'];
 
 // LOD 遷移計測結果
+// frameMs: -1 = 未計測（pending）、-2 = スキップ（連続遷移で上書き）、>= 0 = 計測完了
+const FRAME_MS_PENDING = -1;
+const FRAME_MS_SKIPPED = -2;
+
 interface LODTransition {
   id: number;
   fromLevel: LODLevel;
   toLevel: LODLevel;
   stateUpdateMs: number;   // LOD状態更新にかかった時間（setState呼び出し）
-  frameMs: number;         // フレーム描画にかかった時間（-1 = 未計測）
+  frameMs: number;         // フレーム描画にかかった時間（-1 = 未計測、-2 = スキップ）
   hapticMs: number;        // ハプティクス応答時間（-1 = 未完了/失敗）
   timestamp: number;
 }
@@ -138,6 +146,19 @@ export function LODTest({
   const lodChangeAt = useSharedValue(0);
   const pendingTransitionId = useSharedValue(0);
 
+  // 先行遷移をスキップ扱いにする（連続遷移対策）
+  const markTransitionAsSkipped = useCallback((transitionId: number) => {
+    setTransitions(prev => {
+      const exists = prev.some(t => t.id === transitionId);
+      if (!exists) return prev;
+      return prev.map(t =>
+        t.id === transitionId && t.frameMs === FRAME_MS_PENDING
+          ? { ...t, frameMs: FRAME_MS_SKIPPED }
+          : t
+      );
+    });
+  }, []);
+
   // LOD 変更ハンドラー（競合防止: 状態更新を先に確定、ハプティクスは非同期追随）
   const handleLODChange = useCallback((newLOD: LODLevel, zoomLevel: number) => {
     const prevLOD = currentLODRef.current;
@@ -184,12 +205,17 @@ export function LODTest({
       fromLevel: prevLOD,
       toLevel: newLOD,
       stateUpdateMs,
-      frameMs: -1, // 未計測
+      frameMs: FRAME_MS_PENDING, // 未計測
       hapticMs: -1, // 未完了
       timestamp: Date.now(),
     };
 
     setTransitions(prev => [...prev.slice(-9), transition]);
+
+    // 連続遷移対策: 先行遷移が計測待ちならスキップ扱いにする
+    if (pendingTransitionId.value > 0) {
+      markTransitionAsSkipped(pendingTransitionId.value);
+    }
 
     // フレーム計測開始（useFrameCallback で最初のフレームを検出）
     lodChangeAt.value = performance.now();
@@ -207,8 +233,9 @@ export function LODTest({
       });
     });
   // Note: l1Opacity/Scale, l2Opacity/Scale, l3Opacity/Scale, lodChangeAt, pendingTransitionId are stable SharedValue refs
+  // markTransitionAsSkipped is stable (useCallback with empty deps)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [markTransitionAsSkipped]);
 
   // フレーム計測用コールバック: LOD変更後の最初のフレームで frameMs を確定
   const updateFrameMs = useCallback((transitionId: number, frameMs: number) => {
@@ -511,10 +538,14 @@ export function LODTest({
     ? ((completedHaptics.filter(t => t.hapticMs < 50).length / completedHaptics.length) * 100).toFixed(0)
     : '-';
 
-  // 未計測の遷移数（frameMs または hapticMs が未完了）- now state で定期更新
+  // 未計測の遷移数（frameMs が PENDING）- now state で定期更新
+  // スキップ (FRAME_MS_SKIPPED) は含まない
   const pendingCount = transitions.filter(t =>
-    t.frameMs === -1 || (t.hapticMs === -1 && t.timestamp >= now - 1000)
+    t.frameMs === FRAME_MS_PENDING || (t.hapticMs === -1 && t.timestamp >= now - 1000)
   ).length;
+
+  // スキップされた遷移数（連続遷移で上書きされた）
+  const skippedCount = transitions.filter(t => t.frameMs === FRAME_MS_SKIPPED).length;
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -603,7 +634,7 @@ export function LODTest({
         <View style={styles.statItem}>
           <RNText style={styles.statLabel}>遷移</RNText>
           <RNText style={styles.statValue}>
-            {transitions.length}回{pendingCount > 0 ? ` (${pendingCount}待)` : ''}
+            {transitions.length}回{pendingCount > 0 ? ` (${pendingCount}待)` : ''}{skippedCount > 0 ? ` (${skippedCount}Skip)` : ''}
           </RNText>
         </View>
         <View style={styles.statItem}>

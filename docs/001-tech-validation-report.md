@@ -100,10 +100,11 @@ components/poc/
 | # | 検証項目 | 期待値 | 結果 | 備考 |
 |---|---------|--------|------|------|
 | 1 | LOD L0→L1→L2→L3 切替 | 滑らかな遷移 | ✅ PASS | ズーム連動、段階的表示 |
-| 2 | LOD 遷移時間 | < 100ms | ✅ 実装完了 | performance.now() で計測、UI 表示 |
-| 3 | ハプティクス応答 | < 50ms | ✅ 実装完了 | expo-haptics async 計測 |
+| 2 | LOD 遷移時間 | < 100ms | ✅ 実装完了 | **useFrameCallback** でフレーム基準計測、Frame ms 表示 |
+| 3 | ハプティクス応答 | < 50ms | ✅ 実装完了 | expo-haptics async 計測、成功率表示 |
 | 4 | LOD 別描画要素 | L0〜L3 で異なる | ✅ PASS | 下記 LOD 定義参照 |
 | 5 | ハプティクス種類 | LOD方向で異なる | ✅ PASS | ズームイン: Light/Medium/Heavy、ズームアウト: Selection |
+| 6 | LOD 遷移アニメーション | フェード+スケール | ✅ 実装完了 | 200ms withTiming、opacity + scale (0.95→1.0) |
 
 ### 作成ファイル
 
@@ -133,11 +134,19 @@ app/(tabs)/
 
 **実装内容:**
 - ズームレベルに応じた LOD 自動切替 (useAnimatedReaction)
-- LOD 遷移時間計測 (performance.now())
-- ハプティクス応答時間計測
-- 統計表示 UI（遷移回数、平均ms、< 100ms 率）
+- **フレーム基準の LOD 遷移時間計測 (useFrameCallback)**
+  - lodChangeAt SharedValue で計測開始時刻を記録
+  - 最初のフレームで frameMs を確定
+- ハプティクス応答時間計測（成功率表示付き）
+- **フェード+スケールアニメーション** (200ms withTiming)
+  - opacity: 0→1 / 1→0
+  - scale: 0.95→1.0 / 1.0→0.95
+- 統計表示 UI（遷移回数、Frame ms、< 100ms 率、Haptic ms、< 50ms 率、成功率）
+- 未計測遷移の表示（「N待」）
+- **描画最適化**: currentLOD + previousLOD のみ描画
+- **タイマー競合対策**: clearTimeout で古いタイマーをキャンセル
 
-**結果:** ✅ LOD 切替 + ハプティクス実装完了、計測ロジック実装済み
+**結果:** ✅ LOD 切替 + ハプティクス + アニメーション実装完了
 
 ### utils/haptics.ts
 
@@ -168,7 +177,8 @@ app/(tabs)/
 - ヘッダー: Day 1 / Day 2 切替ボタン
 - ズーム情報: "Zoom: x1.0" / "LOD: L0"
 - LOD ガイド: L0 (x1-2) | L1 (x2-10) | L2 (x10-50) | L3 (x50+)
-- 統計表示: LOD遷移回数、平均ms、< 100ms 率、Haptics ms
+- 統計表示: 遷移回数(N待)、Frame ms、< 100ms%、Haptic ms、< 50ms%、成功率%
+- アニメーション: LOD 要素のフェードイン/アウト + スケール (0.95→1.0)
 
 ---
 

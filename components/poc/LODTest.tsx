@@ -14,8 +14,8 @@
  * - L3 (x50-x100): + 小イベント + 年マーカー + 詳細ラベル
  *
  * アニメーション仕様:
- * - 遷移方式: フェードのみ（200ms withTiming）
- * - スケールアニメーション: なし（PoC では実装せず）
+ * - 遷移方式: フェード + スケール（200ms withTiming）
+ * - スケール: 0.95 → 1.0（出現時）、1.0 → 0.95（消失時）
  * - 描画最適化: 遷移中は currentLOD + previousLOD のみ描画
  */
 
@@ -86,11 +86,18 @@ export function LODTest({
   const savedTranslateX = useSharedValue(0);
   const savedFocalX = useSharedValue(0);
 
-  // LOD アニメーション用 opacity (0〜1)
+  // LOD アニメーション用 opacity (0〜1) + scale (0.95〜1.0)
   const ANIM_DURATION = 200; // ms
+  const SCALE_MIN = 0.95;
+  const SCALE_MAX = 1.0;
+
   const l1Opacity = useSharedValue(0);
   const l2Opacity = useSharedValue(0);
   const l3Opacity = useSharedValue(0);
+
+  const l1Scale = useSharedValue(SCALE_MIN);
+  const l2Scale = useSharedValue(SCALE_MIN);
+  const l3Scale = useSharedValue(SCALE_MIN);
 
   // LOD 状態
   const currentLODRef = useRef<LODLevel>(0);
@@ -102,6 +109,9 @@ export function LODTest({
   // 計測結果
   const [transitions, setTransitions] = useState<LODTransition[]>([]);
   const transitionIdRef = useRef(0);
+
+  // タイマー競合対策: previousLOD クリア用タイマーID
+  const previousLODTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // フレーム基準の LOD 遷移計測用 SharedValue
   // lodChangeAt: LOD 変更時刻（performance.now()）、0 = 計測待ちなし
@@ -125,15 +135,23 @@ export function LODTest({
     setCurrentLOD(newLOD);
     setCurrentZoom(zoomLevel);
 
-    // LOD 別 opacity アニメーション（滑らかな遷移、フェードのみ）
+    // LOD 別 opacity + scale アニメーション（滑らかな遷移）
     l1Opacity.value = withTiming(newLOD >= 1 ? 1 : 0, { duration: ANIM_DURATION });
     l2Opacity.value = withTiming(newLOD >= 2 ? 1 : 0, { duration: ANIM_DURATION });
     l3Opacity.value = withTiming(newLOD >= 3 ? 1 : 0, { duration: ANIM_DURATION });
 
-    // アニメーション完了後に前LODをクリア（描画削減）
-    setTimeout(() => {
+    l1Scale.value = withTiming(newLOD >= 1 ? SCALE_MAX : SCALE_MIN, { duration: ANIM_DURATION });
+    l2Scale.value = withTiming(newLOD >= 2 ? SCALE_MAX : SCALE_MIN, { duration: ANIM_DURATION });
+    l3Scale.value = withTiming(newLOD >= 3 ? SCALE_MAX : SCALE_MIN, { duration: ANIM_DURATION });
+
+    // タイマー競合対策: 古いタイマーをキャンセルしてから新しいタイマーを設定
+    if (previousLODTimerRef.current !== null) {
+      clearTimeout(previousLODTimerRef.current);
+    }
+    previousLODTimerRef.current = setTimeout(() => {
       previousLODRef.current = newLOD;
       setPreviousLOD(newLOD);
+      previousLODTimerRef.current = null;
     }, ANIM_DURATION + 50); // +50ms マージン
 
     const stateUpdateMs = performance.now() - startTime;
@@ -169,7 +187,7 @@ export function LODTest({
         );
       });
     });
-  // Note: l1Opacity, l2Opacity, l3Opacity, lodChangeAt, pendingTransitionId are stable SharedValue refs
+  // Note: l1Opacity/Scale, l2Opacity/Scale, l3Opacity/Scale, lodChangeAt, pendingTransitionId are stable SharedValue refs
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -291,10 +309,21 @@ export function LODTest({
     { scale: scale.value },
   ]);
 
-  // LOD 別 opacity を useDerivedValue で追跡（Skia が検知可能に）
+  // LOD 別 opacity + scale を useDerivedValue で追跡（Skia が検知可能に）
   const derivedL1Opacity = useDerivedValue(() => l1Opacity.value);
   const derivedL2Opacity = useDerivedValue(() => l2Opacity.value);
   const derivedL3Opacity = useDerivedValue(() => l3Opacity.value);
+
+  // スケール変換用（中心基準でスケール）
+  const derivedL1Transform = useDerivedValue<Transforms3d>(() => [
+    { scale: l1Scale.value },
+  ]);
+  const derivedL2Transform = useDerivedValue<Transforms3d>(() => [
+    { scale: l2Scale.value },
+  ]);
+  const derivedL3Transform = useDerivedValue<Transforms3d>(() => [
+    { scale: l3Scale.value },
+  ]);
 
   // タイムラインコンテンツの幅
   const contentWidth = width * 10;
@@ -463,6 +492,11 @@ export function LODTest({
     ? ((completedHaptics.filter(t => t.hapticMs < 50).length / completedHaptics.length) * 100).toFixed(0)
     : '-';
 
+  // 未計測の遷移数（frameMs または hapticMs が未完了）
+  const pendingCount = transitions.filter(t =>
+    t.frameMs === -1 || (t.hapticMs === -1 && t.timestamp >= Date.now() - 1000)
+  ).length;
+
   return (
     <GestureHandlerRootView style={styles.container}>
       {/* LOD 情報表示 */}
@@ -501,24 +535,24 @@ export function LODTest({
                 color="#4FD1C5"
               />
 
-              {/* 主要イベント (L1+) - フェードアニメーション、条件付き描画 */}
+              {/* 主要イベント (L1+) - フェード+スケールアニメーション、条件付き描画 */}
               {(currentLOD >= 1 || previousLOD >= 1) && (
-                <Group opacity={derivedL1Opacity}>
+                <Group opacity={derivedL1Opacity} transform={derivedL1Transform}>
                   {renderMajorEvents()}
                 </Group>
               )}
 
-              {/* 中規模イベント + 時代ラベル (L2+) - フェードアニメーション、条件付き描画 */}
+              {/* 中規模イベント + 時代ラベル (L2+) - フェード+スケールアニメーション、条件付き描画 */}
               {(currentLOD >= 2 || previousLOD >= 2) && (
-                <Group opacity={derivedL2Opacity}>
+                <Group opacity={derivedL2Opacity} transform={derivedL2Transform}>
                   {renderMediumEvents()}
                   {renderEraLabels()}
                 </Group>
               )}
 
-              {/* 小イベント + 年マーカー + 詳細ラベル (L3) - フェードアニメーション、条件付き描画 */}
+              {/* 小イベント + 年マーカー + 詳細ラベル (L3) - フェード+スケールアニメーション、条件付き描画 */}
               {(currentLOD >= 3 || previousLOD >= 3) && (
-                <Group opacity={derivedL3Opacity}>
+                <Group opacity={derivedL3Opacity} transform={derivedL3Transform}>
                   {renderSmallEvents()}
                   {renderYearMarkers()}
                   {renderDetailLabels()}
@@ -549,7 +583,9 @@ export function LODTest({
       <View style={styles.statsBar}>
         <View style={styles.statItem}>
           <RNText style={styles.statLabel}>遷移</RNText>
-          <RNText style={styles.statValue}>{transitions.length}回</RNText>
+          <RNText style={styles.statValue}>
+            {transitions.length}回{pendingCount > 0 ? ` (${pendingCount}待)` : ''}
+          </RNText>
         </View>
         <View style={styles.statItem}>
           <RNText style={styles.statLabel}>Frame</RNText>

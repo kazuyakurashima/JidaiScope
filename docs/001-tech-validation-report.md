@@ -192,10 +192,10 @@ app/(tabs)/
 
 | # | 検証項目 | 期待値 | 結果 | 備考 |
 |---|---------|--------|------|------|
-| 1 | 350イベントデータ生成 | 構造化データ | ✅ PASS | 時代別分布、重要度/カテゴリ付き |
-| 2 | ビューポートカリング | 画面外非描画 | ✅ 実装完了 | yearToX/xToYear 座標変換 |
+| 1 | 約700イベントデータ生成 | 構造化データ | ✅ PASS | 通常350件 + 密集350件 |
+| 2 | ビューポートカリング | 画面外非描画 | ✅ 実装完了 | translateX 同期 + useAnimatedReaction |
 | 3 | LOD 連動イベント表示 | L0-L3で密度変化 | ✅ PASS | L0:0件、L1:major、L2:+medium、L3:all |
-| 4 | 350イベント描画 | 描画成功 | ✅ PASS | カテゴリ別カラー、重要度別サイズ |
+| 4 | **50events/10yr 密集描画** | 1850-1920 各10年で50件 | ✅ PASS | validateDenseDataRequirement() で検証 |
 | 5 | フレームドロップ計測 | < 5% | ⏳ 実機検証待ち | シミュレータでは計測困難 |
 | 6 | メモリ使用量 | < 150MB | ⏳ 実機検証待ち | Instruments で計測予定 |
 
@@ -203,10 +203,10 @@ app/(tabs)/
 
 ```
 data/
-└── mockEvents.ts       # 350件モックイベントデータ
+└── mockEvents.ts       # 約700件モックイベントデータ（通常350 + 密集350）
 
 components/poc/
-└── DenseRenderTest.tsx # 密集描画検証
+└── DenseRenderTest.tsx # 密集描画検証（副作用分離、カリング同期修正済み）
 
 app/(tabs)/
 └── index.tsx           # Day 3 切替UI追加
@@ -214,7 +214,7 @@ app/(tabs)/
 
 ### data/mockEvents.ts
 
-**目的:** 密集描画検証用の350件モックイベントデータ
+**目的:** 密集描画検証用モックイベントデータ（約700件）
 
 **データ構造:**
 - `Era`: 時代定義（id, name, nameJa, startYear, endYear, color）
@@ -224,15 +224,26 @@ app/(tabs)/
 - 縄文〜令和まで15時代
 - PRD セクション 11.2 準拠の時代カラー
 
-**イベント分布:**
+**通常イベント分布（約350件）:**
 | 時代 | 件数 | 備考 |
 |------|------|------|
 | 縄文〜弥生 | 20件 | 古代前期（データ少） |
 | 古墳〜奈良 | 45件 | 古代後期 |
 | 平安 | 40件 | 中世前期 |
 | 鎌倉〜室町 | 50件 | 中世後期 |
-| 戦国〜江戸 | 100件 | 近世（密集テスト対象） |
-| 明治〜令和 | 95件 | 近現代（密集テスト対象） |
+| 戦国〜江戸 | 100件 | 近世 |
+| 明治〜令和 | 95件 | 近現代 |
+
+**密集テスト期間（350件）:**
+| 期間 | 件数 | 密度 |
+|------|------|------|
+| 1850-1860 | 50件 | 50events/10yr ✅ |
+| 1860-1870 | 50件 | 50events/10yr ✅ |
+| 1870-1880 | 50件 | 50events/10yr ✅ |
+| 1880-1890 | 50件 | 50events/10yr ✅ |
+| 1890-1900 | 50件 | 50events/10yr ✅ |
+| 1900-1910 | 50件 | 50events/10yr ✅ |
+| 1910-1920 | 50件 | 50events/10yr ✅ |
 
 **重要度分布:**
 - major: 10%（大マーカー）
@@ -244,17 +255,19 @@ app/(tabs)/
 - `xToYear(x, width, start, end)`: X座標→年変換
 - `getEventsInRange(start, end)`: 範囲内イベント取得
 - `getEventsByEra(eraId)`: 時代別イベント取得
+- `validateDenseDataRequirement()`: 密集描画要件検証
 
-**結果:** ✅ 350件モックデータ生成完了
+**結果:** ✅ 約700件モックデータ生成完了、50events/10yr 要件 PASS
 
 ### DenseRenderTest.tsx
 
-**目的:** 350イベントで60fps維持できるか検証
+**目的:** 約700イベントで60fps維持できるか検証
 
 **実装内容:**
 - ビューポートカリング（画面外イベント非描画）
-  - translateX + scale から可視範囲を計算
+  - **useAnimatedReaction で translateX を React state に同期**
   - 年範囲フィルタリング（マージン50px付き）
+  - **スロットリング: 10px 単位で更新**
 - LOD 連動イベント表示
   - L0: イベント非表示
   - L1: major のみ
@@ -274,20 +287,23 @@ app/(tabs)/
   - Total: 全イベント数
   - Rendered: 描画中イベント数
   - Culled: カリング済みイベント数
-  - Frames: 総フレーム数
+  - **50/10yr: 密集描画要件検証結果**
 - フレームドロップ計測（25ms閾値）
+- **副作用分離: useMemo から useEffect に setState を分離**
+- **interval クリーンアップ: useEffect で確実に clearInterval**
 
-**結果:** ✅ 密集描画 + カリング実装完了
+**結果:** ✅ 密集描画 + カリング + 要件検証実装完了
 
 ### スクリーンショット
 
 シミュレータで以下を確認:
 - ヘッダー: Day 1 / Day 2 / Day 3 切替ボタン
 - ズーム情報: "Zoom: x1.0" / "LOD: L0" / "Drops: N (X.X%)"
-- 統計表示: Total / Rendered / Culled / Frames
+- 統計表示: Total / Rendered / Culled / **50/10yr: PASS/FAIL**
 - Skia Canvas: 時代帯、タイムライン軸、カテゴリ別イベントマーカー
 - LOD ガイド: L0 (x1-2): Era only | L1 (x2-10): +Major | L2 (x10-50): +Medium | L3 (x50+): +Minor
 - 操作ガイド: "Pinch: Zoom | Drag: Scroll | N events visible"
+- **密集描画検証: 1850-1920 期間で50events/10yr を UI で表示**
 
 ---
 

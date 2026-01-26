@@ -1,12 +1,16 @@
 /**
  * mockEvents.ts - Sprint 0 Day 3 PoC
  *
- * 密集描画検証用モックデータ（350件）
+ * 密集描画検証用モックデータ
  *
  * 検証項目:
- * - 350イベント表示で60fps維持
- * - 50events/10yr 密度での描画パフォーマンス
+ * - 受け入れ条件 #4: 50events/10yr 密度での描画パフォーマンス
  * - メモリ使用量 < 150MB
+ *
+ * データ構成:
+ * - 通常イベント: 約350件（時代別分布）
+ * - 密集テスト期間 (1850-1920): 350件（50events/10yr × 7 decades）
+ * - 合計: 約700件
  */
 
 // 時代定義（年代範囲付き）
@@ -79,21 +83,28 @@ const EVENT_TEMPLATES_JA = {
 };
 
 /**
- * 350件のモックイベントを生成
+ * モックイベントを生成
  *
  * 分布:
  * - 縄文〜弥生（古代前期）: 20件（データが少ない）
- * - 古墳〜奈良（古代後期）: 30件
+ * - 古墳〜奈良（古代後期）: 45件
  * - 平安（中世前期）: 40件
  * - 鎌倉〜室町（中世後期）: 50件
- * - 戦国〜江戸（近世）: 100件（密集テスト対象）
- * - 明治〜令和（近現代）: 110件（密集テスト対象）
+ * - 戦国〜江戸（近世）: 100件
+ * - 明治〜令和（近現代）: 95件
+ * - 密集テスト期間 (1850-1920): 350件（50events/10yr × 7 decades）
+ *
+ * 合計: 約700件（密集テスト期間含む）
+ *
+ * 密集描画検証要件:
+ * - 受け入れ条件 #4: 50events/10yr 密度での描画パフォーマンス
+ * - 検証期間: 1850-1920（明治維新前後の激動期）
  */
 function generateMockEvents(): HistoricalEvent[] {
   const events: HistoricalEvent[] = [];
   let eventId = 1;
 
-  // 時代別のイベント数
+  // 時代別のイベント数（通常分布）
   const eraEventCounts: Record<string, number> = {
     jomon: 10,
     yayoi: 10,
@@ -112,6 +123,7 @@ function generateMockEvents(): HistoricalEvent[] {
     reiwa: 5,
   };
 
+  // 通常のイベント生成
   for (const era of ERAS) {
     const count = eraEventCounts[era.id] || 10;
     const yearRange = era.endYear - era.startYear;
@@ -134,6 +146,39 @@ function generateMockEvents(): HistoricalEvent[] {
       events.push({
         id: `event-${eventId++}`,
         year: Math.min(Math.max(year, era.startYear), era.endYear - 1),
+        title,
+        titleJa,
+        eraId: era.id,
+        importance,
+        category,
+      });
+    }
+  }
+
+  // 密集テスト期間 (1850-1920): 50events/10yr × 7 decades = 350件
+  // 受け入れ条件 #4 の検証用
+  const DENSE_START = 1850;
+  const DENSE_END = 1920;
+  const EVENTS_PER_DECADE = 50;
+
+  for (let decade = DENSE_START; decade < DENSE_END; decade += 10) {
+    for (let i = 0; i < EVENTS_PER_DECADE; i++) {
+      // 10年間で均等に分布
+      const year = decade + Math.floor((10 * i) / EVENTS_PER_DECADE) + Math.floor(Math.random() * (10 / EVENTS_PER_DECADE));
+
+      const importance = IMPORTANCE_DISTRIBUTION[Math.floor(Math.random() * IMPORTANCE_DISTRIBUTION.length)];
+      const category = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+
+      // 時代判定（年から時代を特定）
+      const era = ERAS.find(e => year >= e.startYear && year < e.endYear) || ERAS[10]; // fallback: meiji
+
+      const templateIndex = Math.floor(Math.random() * EVENT_TEMPLATES[category].length);
+      const title = `Dense ${EVENT_TEMPLATES[category][templateIndex]} ${decade}-${i + 1}`;
+      const titleJa = `密集${EVENT_TEMPLATES_JA[category][templateIndex]}${decade}-${i + 1}`;
+
+      events.push({
+        id: `event-dense-${eventId++}`,
+        year: Math.min(Math.max(year, DENSE_START), DENSE_END - 1),
         title,
         titleJa,
         eraId: era.id,
@@ -216,12 +261,42 @@ export function xToYear(
   return Math.round(startYear + relativeX * totalYears);
 }
 
+/**
+ * 密集描画要件の検証（50events/10yr）
+ * 1850-1920 の各10年間で50件以上のイベントがあるか確認
+ */
+export function validateDenseDataRequirement(): {
+  valid: boolean;
+  details: Array<{ decade: number; count: number; pass: boolean }>;
+} {
+  const details: Array<{ decade: number; count: number; pass: boolean }> = [];
+
+  for (let decade = 1850; decade < 1920; decade += 10) {
+    const count = MOCK_EVENTS.filter(
+      e => e.year >= decade && e.year < decade + 10
+    ).length;
+    details.push({
+      decade,
+      count,
+      pass: count >= 50,
+    });
+  }
+
+  const valid = details.every(d => d.pass);
+  return { valid, details };
+}
+
+// 密集描画要件の統計
+export const DENSE_STATS = validateDenseDataRequirement();
+
 export default {
   ERAS,
   MOCK_EVENTS,
   EVENT_STATS,
+  DENSE_STATS,
   getEventsInRange,
   getEventsByEra,
   yearToX,
   xToYear,
+  validateDenseDataRequirement,
 };

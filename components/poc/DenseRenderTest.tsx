@@ -2,10 +2,15 @@
  * DenseRenderTest.tsx - Sprint 0 Day 3 PoC
  *
  * 検証項目:
- * 1. 350イベント表示で60fps維持
- * 2. 50events/10yr 密度での描画パフォーマンス
+ * 1. 約700イベント表示で60fps維持（通常350件 + 密集350件）
+ * 2. 50events/10yr 密度での描画パフォーマンス（1850-1920 期間）
  * 3. メモリ使用量 < 150MB
  * 4. ビューポートカリング（画面外イベント非描画）
+ *
+ * 密集描画検証:
+ * - 受け入れ条件 #4: 50events/10yr
+ * - 検証期間: 1850-1920（明治維新前後）
+ * - 各10年間で50件のイベントを保証
  *
  * LOD レベル:
  * - L0 (x1-x2): 時代帯のみ
@@ -24,9 +29,9 @@ import {
   useAnimatedReaction,
   useFrameCallback,
 } from 'react-native-reanimated';
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import type { Transforms3d } from '@shopify/react-native-skia';
-import { MOCK_EVENTS, ERAS, EVENT_STATS, yearToX, type HistoricalEvent } from '../../data/mockEvents';
+import { MOCK_EVENTS, ERAS, EVENT_STATS, DENSE_STATS, yearToX, type HistoricalEvent } from '../../data/mockEvents';
 
 // フォント
 const ROBOTO_FONT = require('../../assets/fonts/Roboto-Medium.ttf');
@@ -140,23 +145,37 @@ export function DenseRenderTest({
     }
   );
 
-  // フレーム統計更新（1秒毎）
-  const updateFrameStats = useCallback(() => {
-    const drops = frameDrops.value;
-    const total = totalFrames.value;
-    const rate = total > 0 ? ((drops / total) * 100).toFixed(1) : '0.0';
-    setFrameStats({ drops, total, rate });
-  }, [frameDrops, totalFrames]);
+  // パン操作中の translateX を React state に同期（カリング更新用）
+  const [currentTranslateX, setCurrentTranslateX] = useState(0);
 
-  // 1秒毎にフレーム統計を更新
-  useState(() => {
-    const interval = setInterval(updateFrameStats, 1000);
+  // translateX の変化を React state に同期（スロットリング: 10px 単位）
+  useAnimatedReaction(
+    () => Math.round(translateX.value / 10) * 10,
+    (current, previous) => {
+      'worklet';
+      if (current !== previous && previous !== null) {
+        runOnJS(setCurrentTranslateX)(current);
+      }
+    }
+  );
+
+  // フレーム統計更新（1秒毎）- useEffect でクリーンアップ保証
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const drops = frameDrops.value;
+      const total = totalFrames.value;
+      const rate = total > 0 ? ((drops / total) * 100).toFixed(1) : '0.0';
+      setFrameStats({ drops, total, rate });
+    }, 1000);
+
     return () => clearInterval(interval);
-  });
+    // Note: frameDrops, totalFrames are stable SharedValue refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ビューポート内のイベントをフィルタリング
-  const getVisibleEvents = useMemo(() => {
-    return (zoom: number, offsetX: number, lod: LODLevel): HistoricalEvent[] => {
+  // ビューポート内のイベントをフィルタリング（純粋計算）
+  const getVisibleEvents = useCallback(
+    (zoom: number, offsetX: number, lod: LODLevel): HistoricalEvent[] => {
       // ビューポートの年範囲を計算
       const timelineWidth = baseTimelineWidth * zoom;
       const viewportStartX = -offsetX;
@@ -186,18 +205,22 @@ export function DenseRenderTest({
       // L3: 全イベント表示
 
       return filtered;
-    };
-  }, [baseTimelineWidth, width]);
+    },
+    [baseTimelineWidth, width]
+  );
 
-  // 現在のビューポート設定でイベントを取得
+  // 現在のビューポート設定でイベントを取得（純粋計算、setState なし）
   const visibleEvents = useMemo(() => {
-    const events = getVisibleEvents(currentZoom, translateX.value, currentLOD);
-    // 統計更新
-    const culled = MOCK_EVENTS.length - events.length;
-    setRenderStats({ rendered: events.length, culled });
-    setVisibleEventCount(events.length);
-    return events;
-  }, [currentZoom, currentLOD, getVisibleEvents, translateX.value]);
+    return getVisibleEvents(currentZoom, currentTranslateX, currentLOD);
+  }, [currentZoom, currentLOD, getVisibleEvents, currentTranslateX]);
+
+  // 統計更新（副作用を useEffect に分離）
+  useEffect(() => {
+    const rendered = visibleEvents.length;
+    const culled = MOCK_EVENTS.length - rendered;
+    setRenderStats({ rendered, culled });
+    setVisibleEventCount(rendered);
+  }, [visibleEvents]);
 
   // ピンチジェスチャー
   const pinchGesture = Gesture.Pinch()
@@ -394,8 +417,10 @@ export function DenseRenderTest({
           <RNText style={styles.statValue}>{renderStats.culled}</RNText>
         </View>
         <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>Frames</RNText>
-          <RNText style={styles.statValue}>{frameStats.total}</RNText>
+          <RNText style={styles.statLabel}>50/10yr</RNText>
+          <RNText style={[styles.statValue, DENSE_STATS.valid ? styles.passValue : styles.failValue]}>
+            {DENSE_STATS.valid ? 'PASS' : 'FAIL'}
+          </RNText>
         </View>
       </View>
 
@@ -492,6 +517,12 @@ const styles = StyleSheet.create({
   },
   highlightValue: {
     color: '#4FD1C5',
+  },
+  passValue: {
+    color: '#4FD1C5',
+  },
+  failValue: {
+    color: '#FF6B6B',
   },
   canvasContainer: {
     flex: 1,

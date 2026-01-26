@@ -259,7 +259,7 @@ export function DenseRenderTest({
     }
   }, true);
 
-  // ズームレベルに応じた LOD 判定
+  // ズームレベルに応じた LOD 判定（React側用、非worklet）
   const getLODLevel = useCallback((zoom: number): LODLevel => {
     if (zoom >= LOD_THRESHOLDS.L2_L3) return 3;
     if (zoom >= LOD_THRESHOLDS.L1_L2) return 2;
@@ -268,12 +268,18 @@ export function DenseRenderTest({
   }, []);
 
   // ズーム更新時の LOD チェック
+  // Note: worklet内ではLOD_THRESHOLDSを直接参照（外部関数呼び出し不可）
   useAnimatedReaction(
     () => scale.value,
     (currentScale) => {
       'worklet';
       const roundedZoom = Math.round(currentScale * 10) / 10;
-      const newLOD = getLODLevel(currentScale);
+      // LOD判定をインライン化（worklet内では外部関数呼び出し不可）
+      let newLOD: LODLevel = 0;
+      if (currentScale >= 50) newLOD = 3;      // L2_L3 threshold
+      else if (currentScale >= 10) newLOD = 2; // L1_L2 threshold
+      else if (currentScale >= 2) newLOD = 1;  // L0_L1 threshold
+
       runOnJS(setCurrentZoom)(roundedZoom);
       if (newLOD !== currentLODRef.current) {
         runOnJS(setCurrentLOD)(newLOD);

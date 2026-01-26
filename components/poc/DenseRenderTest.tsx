@@ -72,6 +72,19 @@ const CATEGORY_COLORS = {
   social: '#DDA0DD',
 };
 
+// ラベル設定（最小フォント 10px 要件: 001-tech-validation.md line 174）
+const LABEL_CONFIG = {
+  fontSize: 10,  // 最小フォントサイズ要件
+  maxWidth: 60,  // ラベル最大幅（衝突判定用、ズーム非適用時の基準値）
+  minSpacing: 8, // ラベル間最小スペース（ズーム非適用時の基準値）
+  offsetY: 14,   // マーカーからのオフセット
+};
+
+// マーカー衝突判定設定
+const MARKER_COLLISION_CONFIG = {
+  minSpacing: 4,  // マーカー間最小スペース（ピクセル）
+};
+
 interface DenseRenderTestProps {
   width?: number;
   height?: number;
@@ -79,12 +92,134 @@ interface DenseRenderTestProps {
 
 type LODLevel = 0 | 1 | 2 | 3;
 
+// ラベル衝突判定用の型
+interface LabelRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  eventId: string;
+}
+
+// ラベル衝突検出（X軸 + Y軸チェック、ズーム倍率考慮）
+function detectLabelCollisions(
+  events: HistoricalEvent[],
+  yearToXFn: (year: number) => number,
+  getYPosition: (event: HistoricalEvent) => number,
+  zoom: number
+): { visible: HistoricalEvent[]; culled: number } {
+  if (events.length === 0) return { visible: [], culled: 0 };
+
+  // ズーム倍率でスケーリング（実描画はGroup scaleで拡大されるため、判定側で補正）
+  // ラベルは画面上で固定サイズに見えるよう、判定幅を zoom で割る
+  const effectiveWidth = LABEL_CONFIG.maxWidth / zoom;
+  const effectiveSpacing = LABEL_CONFIG.minSpacing / zoom;
+  const effectiveHeight = (LABEL_CONFIG.fontSize + 4) / zoom;
+
+  // 重要度順にソート（major > medium > minor）
+  const sortedEvents = [...events].sort((a, b) => {
+    const priority = { major: 0, medium: 1, minor: 2 };
+    return priority[a.importance] - priority[b.importance];
+  });
+
+  const placedLabels: LabelRect[] = [];
+  const visibleEvents: HistoricalEvent[] = [];
+
+  for (const event of sortedEvents) {
+    const x = yearToXFn(event.year);
+    const y = getYPosition(event) + LABEL_CONFIG.offsetY / zoom;
+    const labelRect: LabelRect = {
+      x: x - effectiveWidth / 2,
+      y,
+      width: effectiveWidth,
+      height: effectiveHeight,
+      eventId: event.id,
+    };
+
+    // 衝突チェック（X軸 + Y軸）
+    const hasCollision = placedLabels.some(placed => {
+      const horizontalOverlap =
+        labelRect.x < placed.x + placed.width + effectiveSpacing &&
+        labelRect.x + labelRect.width + effectiveSpacing > placed.x;
+      const verticalOverlap =
+        labelRect.y < placed.y + placed.height &&
+        labelRect.y + labelRect.height > placed.y;
+      return horizontalOverlap && verticalOverlap;
+    });
+
+    if (!hasCollision) {
+      placedLabels.push(labelRect);
+      visibleEvents.push(event);
+    }
+  }
+
+  return {
+    visible: visibleEvents,
+    culled: events.length - visibleEvents.length,
+  };
+}
+
+// マーカー衝突検出（重複時の間引き処理）
+interface MarkerRect {
+  x: number;
+  y: number;
+  radius: number;
+  eventId: string;
+}
+
+function detectMarkerCollisions(
+  events: HistoricalEvent[],
+  yearToXFn: (year: number) => number,
+  getYPosition: (event: HistoricalEvent) => number,
+  zoom: number
+): { visible: HistoricalEvent[]; culled: number } {
+  if (events.length === 0) return { visible: [], culled: 0 };
+
+  // ズーム倍率でスケーリング
+  const effectiveSpacing = MARKER_COLLISION_CONFIG.minSpacing / zoom;
+
+  // 重要度順にソート（major > medium > minor）
+  const sortedEvents = [...events].sort((a, b) => {
+    const priority = { major: 0, medium: 1, minor: 2 };
+    return priority[a.importance] - priority[b.importance];
+  });
+
+  const placedMarkers: MarkerRect[] = [];
+  const visibleEvents: HistoricalEvent[] = [];
+
+  for (const event of sortedEvents) {
+    const x = yearToXFn(event.year);
+    const y = getYPosition(event);
+    const radius = MARKER_SIZES[event.importance] / zoom;
+
+    // 衝突チェック（円の重なり）
+    const hasCollision = placedMarkers.some(placed => {
+      const dx = x - placed.x;
+      const dy = y - placed.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const minDistance = radius + placed.radius + effectiveSpacing;
+      return distance < minDistance;
+    });
+
+    if (!hasCollision) {
+      placedMarkers.push({ x, y, radius, eventId: event.id });
+      visibleEvents.push(event);
+    }
+  }
+
+  return {
+    visible: visibleEvents,
+    culled: events.length - visibleEvents.length,
+  };
+}
+
 export function DenseRenderTest({
   width = SCREEN_WIDTH,
   height = 400
 }: DenseRenderTestProps) {
   const font = useFont(ROBOTO_FONT, 10);
   const labelFont = useFont(ROBOTO_FONT, 12);
+  const eventLabelFont = useFont(ROBOTO_FONT, LABEL_CONFIG.fontSize);
 
   // ズーム・パン状態
   const scale = useSharedValue(1);
@@ -103,6 +238,8 @@ export function DenseRenderTest({
   const [frameStats, setFrameStats] = useState({ drops: 0, total: 0, rate: '0.0' });
   const [visibleEventCount, setVisibleEventCount] = useState(0);
   const [renderStats, setRenderStats] = useState({ rendered: 0, culled: 0 });
+  const [labelStats, setLabelStats] = useState({ visible: 0, culled: 0, rate: '0' });
+  const [markerStats, setMarkerStats] = useState({ visible: 0, culled: 0, rate: '0' });
 
   // 現在の LOD レベルを ref で追跡（worklet 内での比較用）
   const currentLODRef = useRef<LODLevel>(0);
@@ -214,13 +351,60 @@ export function DenseRenderTest({
     return getVisibleEvents(currentZoom, currentTranslateX, currentLOD);
   }, [currentZoom, currentLOD, getVisibleEvents, currentTranslateX]);
 
+  // イベントのY座標を計算（カテゴリ別）
+  const getEventY = useCallback((event: HistoricalEvent): number => {
+    const baseY = height / 2;
+    const offsets = {
+      political: -30,
+      military: -15,
+      cultural: 0,
+      economic: 15,
+      social: 30,
+    };
+    return baseY + offsets[event.category];
+  }, [height]);
+
+  // 年をX座標に変換（現在のタイムライン設定で）
+  const yearToXLocal = useCallback((year: number): number => {
+    return yearToX(year, baseTimelineWidth, TIMELINE_START_YEAR, TIMELINE_END_YEAR);
+  }, [baseTimelineWidth]);
+
+  // マーカー重複処理（全LODレベルで適用）
+  const visibleMarkersResult = useMemo(() => {
+    return detectMarkerCollisions(visibleEvents, yearToXLocal, getEventY, currentZoom);
+  }, [visibleEvents, yearToXLocal, getEventY, currentZoom]);
+
+  // ラベル表示対象イベント（L2以上で major/medium のみ、ズーム考慮）
+  const eventsWithLabels = useMemo(() => {
+    if (currentLOD < 2) return { visible: [], culled: 0 };
+    // L2: major のみ、L3: major + medium（重複排除済みマーカーから選択）
+    const labelCandidates = visibleMarkersResult.visible.filter(e =>
+      currentLOD >= 3 ? (e.importance === 'major' || e.importance === 'medium') : e.importance === 'major'
+    );
+    return detectLabelCollisions(labelCandidates, yearToXLocal, getEventY, currentZoom);
+  }, [visibleMarkersResult.visible, currentLOD, yearToXLocal, getEventY, currentZoom]);
+
   // 統計更新（副作用を useEffect に分離）
   useEffect(() => {
     const rendered = visibleEvents.length;
     const culled = MOCK_EVENTS.length - rendered;
     setRenderStats({ rendered, culled });
-    setVisibleEventCount(rendered);
-  }, [visibleEvents]);
+    setVisibleEventCount(visibleMarkersResult.visible.length);
+
+    // マーカー統計更新
+    const markerVisible = visibleMarkersResult.visible.length;
+    const markerCulled = visibleMarkersResult.culled;
+    const markerTotal = markerVisible + markerCulled;
+    const markerRate = markerTotal > 0 ? ((markerVisible / markerTotal) * 100).toFixed(0) : '0';
+    setMarkerStats({ visible: markerVisible, culled: markerCulled, rate: markerRate });
+
+    // ラベル統計更新
+    const labelVisible = eventsWithLabels.visible.length;
+    const labelCulled = eventsWithLabels.culled;
+    const labelTotal = labelVisible + labelCulled;
+    const labelRate = labelTotal > 0 ? ((labelVisible / labelTotal) * 100).toFixed(0) : '0';
+    setLabelStats({ visible: labelVisible, culled: labelCulled, rate: labelRate });
+  }, [visibleEvents, visibleMarkersResult, eventsWithLabels]);
 
   // ピンチジェスチャー
   const pinchGesture = Gesture.Pinch()
@@ -293,39 +477,48 @@ export function DenseRenderTest({
     });
   };
 
-  // 時代ラベルの描画（L2以上）
+  // 時代ラベルの描画（L2以上、スクリーン固定サイズ）
   const renderEraLabels = () => {
     if (currentLOD < 2 || !labelFont) return null;
 
     const relevantEras = ERAS.filter(era => era.endYear >= TIMELINE_START_YEAR && era.startYear <= TIMELINE_END_YEAR);
+    const inverseScale = 1 / currentZoom;
 
     return relevantEras.map((era) => {
       const startX = yearToX(Math.max(era.startYear, TIMELINE_START_YEAR), timelineWidth, TIMELINE_START_YEAR, TIMELINE_END_YEAR);
       const endX = yearToX(Math.min(era.endYear, TIMELINE_END_YEAR), timelineWidth, TIMELINE_START_YEAR, TIMELINE_END_YEAR);
       const centerX = (startX + endX) / 2;
+      const yPos = height - 10 / currentZoom;
 
       return (
-        <Text
+        <Group
           key={`era-label-${era.id}`}
-          x={centerX - 20}
-          y={height - 10}
-          text={era.name}
-          font={labelFont}
-          color="#F7FAFC"
-        />
+          transform={[
+            { translateX: centerX },
+            { translateY: yPos },
+            { scale: inverseScale },
+          ]}
+        >
+          <Text
+            x={-20}
+            y={0}
+            text={era.name}
+            font={labelFont}
+            color="#F7FAFC"
+          />
+        </Group>
       );
     });
   };
 
-  // イベントマーカーの描画
+  // イベントマーカーの描画（重複処理済み、スクリーン固定サイズ）
+  // A方式: 逆スケール適用により、ズームに関係なく一定のスクリーンサイズを維持
   const renderEventMarkers = () => {
-    return visibleEvents.map((event) => {
+    return visibleMarkersResult.visible.map((event) => {
       const x = yearToX(event.year, timelineWidth, TIMELINE_START_YEAR, TIMELINE_END_YEAR);
-      const y = height / 2 + (event.category === 'political' ? -30 :
-                              event.category === 'military' ? -15 :
-                              event.category === 'cultural' ? 0 :
-                              event.category === 'economic' ? 15 : 30);
-      const radius = MARKER_SIZES[event.importance];
+      const y = getEventY(event);
+      // 逆スケール: Group transform の scale を相殺し、スクリーン上で固定サイズ
+      const radius = MARKER_SIZES[event.importance] / currentZoom;
       const color = CATEGORY_COLORS[event.category];
 
       return (
@@ -340,49 +533,98 @@ export function DenseRenderTest({
     });
   };
 
-  // 年マーカーの描画（L3のみ）
+  // イベントラベルの描画（L2以上、衝突回避済み、スクリーン固定サイズ）
+  // A方式: Groupで逆スケール適用により、ズームに関係なく一定のフォントサイズを維持
+  const renderEventLabels = () => {
+    if (currentLOD < 2 || !eventLabelFont) return null;
+
+    const inverseScale = 1 / currentZoom;
+
+    return eventsWithLabels.visible.map((event) => {
+      const x = yearToX(event.year, timelineWidth, TIMELINE_START_YEAR, TIMELINE_END_YEAR);
+      const y = getEventY(event) + LABEL_CONFIG.offsetY / currentZoom;
+
+      // タイトルを短縮（6文字 + "..."）
+      const displayTitle = event.titleJa.length > 7
+        ? event.titleJa.slice(0, 6) + '...'
+        : event.titleJa;
+
+      // Group transform で逆スケール適用（ラベル位置を中心にスケール）
+      return (
+        <Group
+          key={`label-${event.id}`}
+          transform={[
+            { translateX: x },
+            { translateY: y },
+            { scale: inverseScale },
+          ]}
+        >
+          <Text
+            x={-20}
+            y={0}
+            text={displayTitle}
+            font={eventLabelFont}
+            color="#E2E8F0"
+          />
+        </Group>
+      );
+    });
+  };
+
+  // 年マーカーの描画（L3のみ、スクリーン固定サイズ）
   const renderYearMarkers = () => {
     if (currentLOD < 3 || !font) return null;
 
     const markers = [];
     const yearInterval = 100; // 100年ごと
+    const inverseScale = 1 / currentZoom;
 
     for (let year = 0; year <= TIMELINE_END_YEAR; year += yearInterval) {
       if (year < TIMELINE_START_YEAR) continue;
       const x = yearToX(year, timelineWidth, TIMELINE_START_YEAR, TIMELINE_END_YEAR);
 
+      // 線は逆スケールで stroke を調整
       markers.push(
         <Line
           key={`year-line-${year}`}
-          p1={vec(x, height - 30)}
-          p2={vec(x, height - 20)}
+          p1={vec(x, height - 30 / currentZoom)}
+          p2={vec(x, height - 20 / currentZoom)}
           color="#718096"
-          strokeWidth={1}
+          strokeWidth={1 / currentZoom}
         />
       );
 
+      // テキストは Group で逆スケール
       markers.push(
-        <Text
+        <Group
           key={`year-text-${year}`}
-          x={x - 15}
-          y={height - 35}
-          text={`${year}`}
-          font={font}
-          color="#718096"
-        />
+          transform={[
+            { translateX: x },
+            { translateY: height - 35 / currentZoom },
+            { scale: inverseScale },
+          ]}
+        >
+          <Text
+            x={-15}
+            y={0}
+            text={`${year}`}
+            font={font}
+            color="#718096"
+          />
+        </Group>
       );
     }
 
     return markers;
   };
 
-  // タイムライン軸
+  // タイムライン軸（スクリーン固定の線幅）
   const renderTimelineAxis = () => (
     <Rect
       x={0}
-      y={height / 2 - 1}
+      y={height / 2 - 1 / currentZoom}
       width={timelineWidth}
-      height={2}
+      height={2 / currentZoom}
       color="#4FD1C5"
     />
   );
@@ -424,6 +666,14 @@ export function DenseRenderTest({
         </View>
       </View>
 
+      {/* マーカー・ラベル統計バー */}
+      <View style={styles.labelStatsBar}>
+        <RNText style={styles.labelStatsText}>
+          Markers: {markerStats.visible}/{markerStats.visible + markerStats.culled} ({markerStats.rate}%)
+          {currentLOD >= 2 && ` | Labels: ${labelStats.visible}/${labelStats.visible + labelStats.culled} (${labelStats.rate}%)`}
+        </RNText>
+      </View>
+
       {/* Canvas */}
       <GestureDetector gesture={composedGesture}>
         <View style={styles.canvasContainer}>
@@ -440,6 +690,9 @@ export function DenseRenderTest({
 
               {/* イベントマーカー */}
               {renderEventMarkers()}
+
+              {/* イベントラベル（L2+、衝突回避済み） */}
+              {renderEventLabels()}
 
               {/* 年マーカー（L3） */}
               {renderYearMarkers()}
@@ -547,6 +800,19 @@ const styles = StyleSheet.create({
   guideText: {
     color: '#718096',
     fontSize: 12,
+  },
+  labelStatsBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    backgroundColor: '#1A2A3A',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2D3748',
+  },
+  labelStatsText: {
+    color: '#4ECDC4',
+    fontSize: 11,
+    textAlign: 'center',
+    fontFamily: 'monospace',
   },
 });
 

@@ -11,7 +11,11 @@
  * - 通常イベント: 約350件（時代別分布）
  * - 密集テスト期間 (1850-1920): 350件（50events/10yr × 7 decades）
  * - 合計: 約700件
+ *
+ * Note: 時代色は tokens.ts の ERA_COLORS を使用（15時代、reiwa なし）
  */
+
+import { ERA_COLORS } from '@/constants/tokens';
 
 // 時代定義（年代範囲付き）
 export interface Era {
@@ -34,23 +38,24 @@ export interface HistoricalEvent {
   category: 'political' | 'cultural' | 'military' | 'economic' | 'social';
 }
 
-// 時代データ（PRD セクション 11.2 準拠）
+// 時代データ（PRD セクション 11.2 準拠、15時代 - tokens.ts ERA_COLORS 準拠）
+// Note: reiwa は ERA_COLORS に含まれないため、heisei で終了（endYear を 2030 に延長）
 export const ERAS: Era[] = [
-  { id: 'jomon', name: 'Jomon', nameJa: '縄文', startYear: -14000, endYear: -300, color: '#8B7355' },
-  { id: 'yayoi', name: 'Yayoi', nameJa: '弥生', startYear: -300, endYear: 300, color: '#D4A574' },
-  { id: 'kofun', name: 'Kofun', nameJa: '古墳', startYear: 300, endYear: 538, color: '#B8860B' },
-  { id: 'asuka', name: 'Asuka', nameJa: '飛鳥', startYear: 538, endYear: 710, color: '#CD853F' },
-  { id: 'nara', name: 'Nara', nameJa: '奈良', startYear: 710, endYear: 794, color: '#DAA520' },
-  { id: 'heian', name: 'Heian', nameJa: '平安', startYear: 794, endYear: 1185, color: '#9370DB' },
-  { id: 'kamakura', name: 'Kamakura', nameJa: '鎌倉', startYear: 1185, endYear: 1333, color: '#4682B4' },
-  { id: 'muromachi', name: 'Muromachi', nameJa: '室町', startYear: 1336, endYear: 1573, color: '#6B8E23' },
-  { id: 'sengoku', name: 'Sengoku', nameJa: '戦国', startYear: 1467, endYear: 1615, color: '#DC143C' },
-  { id: 'edo', name: 'Edo', nameJa: '江戸', startYear: 1603, endYear: 1868, color: '#4169E1' },
-  { id: 'meiji', name: 'Meiji', nameJa: '明治', startYear: 1868, endYear: 1912, color: '#228B22' },
-  { id: 'taisho', name: 'Taisho', nameJa: '大正', startYear: 1912, endYear: 1926, color: '#9932CC' },
-  { id: 'showa', name: 'Showa', nameJa: '昭和', startYear: 1926, endYear: 1989, color: '#1E90FF' },
-  { id: 'heisei', name: 'Heisei', nameJa: '平成', startYear: 1989, endYear: 2019, color: '#FF69B4' },
-  { id: 'reiwa', name: 'Reiwa', nameJa: '令和', startYear: 2019, endYear: 2030, color: '#00CED1' },
+  { id: 'jomon', name: 'Jomon', nameJa: '縄文', startYear: -14000, endYear: -300, color: ERA_COLORS.jomon },
+  { id: 'yayoi', name: 'Yayoi', nameJa: '弥生', startYear: -300, endYear: 300, color: ERA_COLORS.yayoi },
+  { id: 'kofun', name: 'Kofun', nameJa: '古墳', startYear: 300, endYear: 538, color: ERA_COLORS.kofun },
+  { id: 'asuka', name: 'Asuka', nameJa: '飛鳥', startYear: 538, endYear: 710, color: ERA_COLORS.asuka },
+  { id: 'nara', name: 'Nara', nameJa: '奈良', startYear: 710, endYear: 794, color: ERA_COLORS.nara },
+  { id: 'heian', name: 'Heian', nameJa: '平安', startYear: 794, endYear: 1185, color: ERA_COLORS.heian },
+  { id: 'kamakura', name: 'Kamakura', nameJa: '鎌倉', startYear: 1185, endYear: 1333, color: ERA_COLORS.kamakura },
+  { id: 'muromachi', name: 'Muromachi', nameJa: '室町', startYear: 1336, endYear: 1573, color: ERA_COLORS.muromachi },
+  { id: 'sengoku', name: 'Sengoku', nameJa: '戦国', startYear: 1467, endYear: 1615, color: ERA_COLORS.sengoku },
+  { id: 'azuchiMomoyama', name: 'Azuchi-Momoyama', nameJa: '安土桃山', startYear: 1573, endYear: 1603, color: ERA_COLORS.azuchiMomoyama },
+  { id: 'edo', name: 'Edo', nameJa: '江戸', startYear: 1603, endYear: 1868, color: ERA_COLORS.edo },
+  { id: 'meiji', name: 'Meiji', nameJa: '明治', startYear: 1868, endYear: 1912, color: ERA_COLORS.meiji },
+  { id: 'taisho', name: 'Taisho', nameJa: '大正', startYear: 1912, endYear: 1926, color: ERA_COLORS.taisho },
+  { id: 'showa', name: 'Showa', nameJa: '昭和', startYear: 1926, endYear: 1989, color: ERA_COLORS.showa },
+  { id: 'heisei', name: 'Heisei', nameJa: '平成', startYear: 1989, endYear: 2030, color: ERA_COLORS.heisei },
 ];
 
 // 重要度の分布（major: 10%, medium: 30%, minor: 60%）
@@ -85,13 +90,13 @@ const EVENT_TEMPLATES_JA = {
 /**
  * モックイベントを生成
  *
- * 分布:
+ * 分布（15時代 - ERA_COLORS 準拠）:
  * - 縄文〜弥生（古代前期）: 20件（データが少ない）
  * - 古墳〜奈良（古代後期）: 45件
  * - 平安（中世前期）: 40件
  * - 鎌倉〜室町（中世後期）: 50件
- * - 戦国〜江戸（近世）: 100件
- * - 明治〜令和（近現代）: 95件
+ * - 戦国〜江戸（近世）: 110件（安土桃山含む）
+ * - 明治〜平成（近現代）: 95件
  * - 密集テスト期間 (1850-1920): 350件（50events/10yr × 7 decades）
  *
  * 合計: 約700件（密集テスト期間含む）
@@ -104,7 +109,7 @@ function generateMockEvents(): HistoricalEvent[] {
   const events: HistoricalEvent[] = [];
   let eventId = 1;
 
-  // 時代別のイベント数（通常分布）
+  // 時代別のイベント数（通常分布、15時代 - ERA_COLORS 準拠）
   const eraEventCounts: Record<string, number> = {
     jomon: 10,
     yayoi: 10,
@@ -115,12 +120,12 @@ function generateMockEvents(): HistoricalEvent[] {
     kamakura: 25,
     muromachi: 25,
     sengoku: 40,
+    azuchiMomoyama: 10,
     edo: 60,
     meiji: 40,
     taisho: 15,
     showa: 25,
-    heisei: 10,
-    reiwa: 5,
+    heisei: 15,  // reiwa 分を統合
   };
 
   // 通常のイベント生成

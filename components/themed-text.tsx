@@ -15,10 +15,17 @@ export function ThemedText({
   type = 'default',
   ...rest
 }: ThemedTextProps) {
-  const { colors, typography } = useTheme();
+  const { colors, typography, isDark } = useTheme();
 
-  // カスタムカラーまたはテーマのテキストカラーを使用
-  const textColor = lightColor || darkColor || colors.text;
+  // テーマに応じてカスタムカラーを選択
+  // Dark mode: darkColor を優先、Light mode: lightColor を優先
+  const getTextColor = () => {
+    if (isDark) {
+      return darkColor ?? lightColor ?? colors.text;
+    }
+    return lightColor ?? darkColor ?? colors.text;
+  };
+  const textColor = getTextColor();
   // リンク用のカラー
   const linkColor = colors.accent;
 

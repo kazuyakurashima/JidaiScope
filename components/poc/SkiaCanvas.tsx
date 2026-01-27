@@ -11,18 +11,17 @@
  */
 
 import { Canvas, Rect, Circle, Group, Text, useFont, Line, vec } from '@shopify/react-native-skia';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, Dimensions } from 'react-native';
+import { useMemo } from 'react';
 
-import { ERA_COLORS, getColors } from '@/constants/tokens';
+import { ERA_COLORS } from '@/constants/tokens';
+import { useTheme } from '@/hooks/useTheme';
 
 // Roboto フォント（ローカルアセット、相対パスでMetro解決の安定性を確保）
 // Note: 本番では NotoSansJP などの日本語フォントを assets/fonts に配置
 const ROBOTO_FONT = require('../../assets/fonts/Roboto-Medium.ttf');
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// ダークテーマのカラーを取得（PoC はダークモード固定）
-const COLORS = getColors('dark');
 
 // テスト用の時代データ（英語ラベル: PoC用、日本語フォント未導入のため）
 // Note: ERA_COLORS は tokens.ts から import（15時代、reiwa なし）
@@ -48,6 +47,18 @@ export function SkiaCanvas({
   width = SCREEN_WIDTH,
   height = 300
 }: SkiaCanvasProps) {
+  // テーマから色とトークンを取得（動的テーマ対応）
+  const { colors, radius } = useTheme();
+
+  // 動的スタイル（テーマ変更時に再計算）
+  const dynamicStyles = useMemo(() => ({
+    container: {
+      backgroundColor: colors.bg,
+      borderRadius: radius.md,
+      overflow: 'hidden' as const,
+    },
+  }), [colors, radius]);
+
   // フォント読み込み（Roboto: Skiaテストアセット）
   // Note: フォント未ロードでも図形描画は継続、テキストのみスキップ
   const font = useFont(ROBOTO_FONT, 14);
@@ -86,7 +97,7 @@ export function SkiaCanvas({
           cx={50 + i * 30}
           cy={height / 2}
           r={8}
-          color={COLORS.text}
+          color={colors.text}
           style="fill"
         />
       );
@@ -108,7 +119,7 @@ export function SkiaCanvas({
           y={height - 20}
           text={era.name}
           font={labelFont}
-          color={COLORS.text}
+          color={colors.text}
         />
       );
       x += era.width;
@@ -126,7 +137,7 @@ export function SkiaCanvas({
           key={`line-${i}`}
           p1={vec(x, height - 30)}
           p2={vec(x, height - 15)}
-          color={COLORS.textTertiary}
+          color={colors.textTertiary}
           strokeWidth={1}
         />
       );
@@ -135,7 +146,7 @@ export function SkiaCanvas({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <Canvas style={{ width, height }}>
         <Group>
           {/* 背景 */}
@@ -144,7 +155,7 @@ export function SkiaCanvas({
             y={0}
             width={width}
             height={height}
-            color={COLORS.bg}
+            color={colors.bg}
           />
 
           {/* 時代帯 */}
@@ -159,7 +170,7 @@ export function SkiaCanvas({
             y={height / 2 - 1}
             width={width}
             height={2}
-            color={COLORS.primary}
+            color={colors.primary}
             opacity={0.8}
           />
 
@@ -176,7 +187,7 @@ export function SkiaCanvas({
               y={20}
               text="Phase 1: Rect / Circle / Line / Text"
               font={font}
-              color={COLORS.primary}
+              color={colors.primary}
             />
           )}
         </Group>
@@ -184,13 +195,5 @@ export function SkiaCanvas({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: COLORS.bg,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-});
 
 export default SkiaCanvas;

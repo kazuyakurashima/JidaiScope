@@ -9,7 +9,7 @@
  */
 
 import { Canvas, Rect, Circle, Group } from '@shopify/react-native-skia';
-import { View, StyleSheet, Dimensions, Text as RNText } from 'react-native';
+import { View, Dimensions, Text as RNText } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   useSharedValue,
@@ -20,15 +20,13 @@ import {
   useAnimatedReaction,
 } from 'react-native-reanimated';
 import type { Transforms3d } from '@shopify/react-native-skia';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import * as Haptics from 'expo-haptics';
 
-import { ERA_COLOR_ARRAY, getColors } from '@/constants/tokens';
+import { ERA_COLOR_ARRAY } from '@/constants/tokens';
+import { useTheme } from '@/hooks/useTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// ダークテーマのカラーを取得（PoC はダークモード固定）
-const COLORS = getColors('dark');
 
 // ズーム制限
 const MIN_ZOOM = 1;
@@ -46,6 +44,37 @@ export function PinchZoomTest({
   width = SCREEN_WIDTH,
   height = 400
 }: PinchZoomTestProps) {
+  // テーマから色とトークンを取得（動的テーマ対応）
+  const { colors, spacing, typography } = useTheme();
+
+  // 動的スタイル（テーマ変更時に再計算）
+  const dynamicStyles = useMemo(() => ({
+    container: { flex: 1, backgroundColor: colors.bg },
+    infoBar: {
+      flexDirection: 'row' as const,
+      justifyContent: 'space-between' as const,
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[2],
+      backgroundColor: colors.bgSecondary,
+    },
+    infoText: {
+      color: colors.text,
+      fontSize: typography.size.base,
+      fontFamily: typography.family.mono,
+    },
+    canvasContainer: { flex: 1, overflow: 'hidden' as const },
+    guideBar: {
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[3],
+      backgroundColor: colors.bgSecondary,
+      alignItems: 'center' as const,
+    },
+    guideText: {
+      color: colors.textTertiary,
+      fontSize: typography.size.sm,
+    },
+  }), [colors, spacing, typography]);
+
   // 状態管理 (Reanimated shared values for 60fps)
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -225,7 +254,7 @@ export function PinchZoomTest({
           cx={x}
           cy={y}
           r={radius}
-          color={COLORS.text}
+          color={colors.text}
           style="fill"
         />
       );
@@ -248,7 +277,7 @@ export function PinchZoomTest({
           y={height - 20}
           width={1}
           height={10}
-          color={COLORS.textTertiary}
+          color={colors.textTertiary}
         />
       );
     }
@@ -256,20 +285,20 @@ export function PinchZoomTest({
   };
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <GestureHandlerRootView style={dynamicStyles.container}>
       {/* ズーム情報表示 */}
-      <View style={styles.infoBar}>
-        <RNText style={styles.infoText}>
+      <View style={dynamicStyles.infoBar}>
+        <RNText style={dynamicStyles.infoText}>
           Zoom: x{currentZoom.toFixed(1)}
         </RNText>
-        <RNText style={styles.infoText}>
+        <RNText style={dynamicStyles.infoText}>
           Drops: {frameStats.drops} ({frameStats.rate}%)
         </RNText>
       </View>
 
       {/* Skia Canvas with Gestures */}
       <GestureDetector gesture={composedGesture}>
-        <View style={styles.canvasContainer}>
+        <View style={dynamicStyles.canvasContainer}>
           <Canvas style={{ width, height }}>
             <Group transform={transform}>
               {/* 背景 */}
@@ -278,7 +307,7 @@ export function PinchZoomTest({
                 y={0}
                 width={contentWidth}
                 height={height}
-                color={COLORS.bg}
+                color={colors.bg}
               />
 
               {/* 時代帯 */}
@@ -290,7 +319,7 @@ export function PinchZoomTest({
                 y={height / 2 - 1}
                 width={contentWidth}
                 height={2}
-                color={COLORS.primary}
+                color={colors.primary}
               />
 
               {/* イベントマーカー */}
@@ -304,46 +333,13 @@ export function PinchZoomTest({
       </GestureDetector>
 
       {/* 操作ガイド */}
-      <View style={styles.guideBar}>
-        <RNText style={styles.guideText}>
+      <View style={dynamicStyles.guideBar}>
+        <RNText style={dynamicStyles.guideText}>
           Pinch: ズーム | Drag: スクロール | Double-tap: x2
         </RNText>
       </View>
     </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  infoBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: COLORS.bgSecondary,
-  },
-  infoText: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontFamily: 'monospace',
-  },
-  canvasContainer: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  guideBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.bgSecondary,
-    alignItems: 'center',
-  },
-  guideText: {
-    color: COLORS.textTertiary,
-    fontSize: 12,
-  },
-});
 
 export default PinchZoomTest;

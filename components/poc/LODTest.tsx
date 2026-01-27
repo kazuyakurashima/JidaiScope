@@ -24,7 +24,7 @@
  */
 
 import { Canvas, Rect, Circle, Group, Text, useFont, Line, vec } from '@shopify/react-native-skia';
-import { View, StyleSheet, Dimensions, Text as RNText } from 'react-native';
+import { View, Dimensions, Text as RNText } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   useSharedValue,
@@ -34,19 +34,17 @@ import {
   withTiming,
   useFrameCallback,
 } from 'react-native-reanimated';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Transforms3d } from '@shopify/react-native-skia';
 import { triggerLODHaptic, type LODLevel } from '../../utils/haptics';
 
-import { ERA_COLOR_ARRAY, getColors } from '@/constants/tokens';
+import { ERA_COLOR_ARRAY } from '@/constants/tokens';
+import { useTheme } from '@/hooks/useTheme';
 
 // フォント
 const ROBOTO_FONT = require('../../assets/fonts/Roboto-Medium.ttf');
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// ダークテーマのカラーを取得（PoC はダークモード固定）
-const COLORS = getColors('dark');
 
 // ズーム制限
 const MIN_ZOOM = 1;
@@ -86,6 +84,82 @@ export function LODTest({
   width = SCREEN_WIDTH,
   height = 400
 }: LODTestProps) {
+  // テーマから色とトークンを取得（動的テーマ対応）
+  const { colors, spacing, typography, radius } = useTheme();
+
+  // 動的スタイル（テーマ変更時に再計算）
+  const dynamicStyles = useMemo(() => ({
+    container: { flex: 1, backgroundColor: colors.bg },
+    infoBar: {
+      flexDirection: 'row' as const,
+      justifyContent: 'space-between' as const,
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[2],
+      backgroundColor: colors.bgSecondary,
+    },
+    infoText: {
+      color: colors.text,
+      fontSize: typography.size.base,
+      fontFamily: typography.family.mono,
+    },
+    lodBadge: {
+      backgroundColor: colors.primary,
+      color: colors.bg,
+      paddingHorizontal: spacing[2],
+      paddingVertical: spacing[1],
+      borderRadius: radius.sm,
+      fontWeight: typography.weight.bold,
+    },
+    canvasContainer: { flex: 1, overflow: 'hidden' as const },
+    lodGuide: {
+      flexDirection: 'row' as const,
+      justifyContent: 'space-around' as const,
+      paddingVertical: spacing[2],
+      backgroundColor: colors.bgSecondary,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    lodLabel: {
+      color: colors.textTertiary,
+      fontSize: typography.size.sm,
+      fontFamily: typography.family.mono,
+    },
+    activeLOD: {
+      color: colors.primary,
+      fontWeight: typography.weight.bold,
+    },
+    statsBar: {
+      flexDirection: 'row' as const,
+      justifyContent: 'space-around' as const,
+      paddingVertical: spacing[2],
+      backgroundColor: colors.bgSecondary,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    statItem: { alignItems: 'center' as const },
+    statLabel: {
+      color: colors.textTertiary,
+      fontSize: typography.size.xs,
+    },
+    statValue: {
+      color: colors.text,
+      fontSize: typography.size.base,
+      fontFamily: typography.family.mono,
+      fontWeight: typography.weight.bold,
+    },
+    passValue: { color: colors.success },
+    guideBar: {
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[3],
+      backgroundColor: colors.bgSecondary,
+      alignItems: 'center' as const,
+    },
+    guideText: {
+      color: colors.textTertiary,
+      fontSize: typography.size.sm,
+    },
+  }), [colors, spacing, typography, radius]);
+
   // フォント
   const font = useFont(ROBOTO_FONT, 14);
   const smallFont = useFont(ROBOTO_FONT, 10);
@@ -406,7 +480,7 @@ export function LODTest({
           cx={x}
           cy={height / 2}
           r={12}
-          color={COLORS.text}
+          color={colors.text}
           style="fill"
         />
       );
@@ -426,7 +500,7 @@ export function LODTest({
           cx={x}
           cy={y}
           r={8}
-          color={COLORS.primary}
+          color={colors.primary}
           style="fill"
         />
       );
@@ -446,7 +520,7 @@ export function LODTest({
           cx={x}
           cy={y}
           r={4}
-          color={COLORS.textTertiary}
+          color={colors.textTertiary}
           style="fill"
         />
       );
@@ -466,7 +540,7 @@ export function LODTest({
         y={30}
         text={name}
         font={font}
-        color={COLORS.text}
+        color={colors.text}
       />
     ));
   };
@@ -481,7 +555,7 @@ export function LODTest({
           key={`year-${i}`}
           p1={vec(x, height - 25)}
           p2={vec(x, height - 10)}
-          color={COLORS.textTertiary}
+          color={colors.textTertiary}
           strokeWidth={i % 10 === 0 ? 2 : 1}
         />
       );
@@ -503,7 +577,7 @@ export function LODTest({
           y={height - 30}
           text={`${800 + i * 120}AD`}
           font={smallFont}
-          color={COLORS.textSecondary}
+          color={colors.textSecondary}
         />
       );
     }
@@ -552,20 +626,20 @@ export function LODTest({
   const skippedCount = transitions.filter(t => t.frameMs === FRAME_MS_SKIPPED).length;
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <GestureHandlerRootView style={dynamicStyles.container}>
       {/* LOD 情報表示 */}
-      <View style={styles.infoBar}>
-        <RNText style={styles.infoText}>
+      <View style={dynamicStyles.infoBar}>
+        <RNText style={dynamicStyles.infoText}>
           Zoom: x{currentZoom.toFixed(1)}
         </RNText>
-        <RNText style={[styles.infoText, styles.lodBadge]}>
+        <RNText style={[dynamicStyles.infoText, dynamicStyles.lodBadge]}>
           LOD: L{currentLOD}
         </RNText>
       </View>
 
       {/* Skia Canvas with Gestures */}
       <GestureDetector gesture={composedGesture}>
-        <View style={styles.canvasContainer}>
+        <View style={dynamicStyles.canvasContainer}>
           <Canvas style={{ width, height }}>
             <Group transform={transform}>
               {/* 背景 */}
@@ -574,7 +648,7 @@ export function LODTest({
                 y={0}
                 width={contentWidth}
                 height={height}
-                color={COLORS.bg}
+                color={colors.bg}
               />
 
               {/* 時代帯 (L0+) */}
@@ -586,7 +660,7 @@ export function LODTest({
                 y={height / 2 - 1}
                 width={contentWidth}
                 height={2}
-                color={COLORS.primary}
+                color={colors.primary}
               />
 
               {/* 主要イベント (L1+) - フェード+スケールアニメーション、条件付き描画 */}
@@ -618,151 +692,69 @@ export function LODTest({
       </GestureDetector>
 
       {/* LOD 閾値ガイド */}
-      <View style={styles.lodGuide}>
-        <RNText style={[styles.lodLabel, currentLOD === 0 && styles.activeLOD]}>
+      <View style={dynamicStyles.lodGuide}>
+        <RNText style={[dynamicStyles.lodLabel, currentLOD === 0 && dynamicStyles.activeLOD]}>
           L0 (x1-2)
         </RNText>
-        <RNText style={[styles.lodLabel, currentLOD === 1 && styles.activeLOD]}>
+        <RNText style={[dynamicStyles.lodLabel, currentLOD === 1 && dynamicStyles.activeLOD]}>
           L1 (x2-10)
         </RNText>
-        <RNText style={[styles.lodLabel, currentLOD === 2 && styles.activeLOD]}>
+        <RNText style={[dynamicStyles.lodLabel, currentLOD === 2 && dynamicStyles.activeLOD]}>
           L2 (x10-50)
         </RNText>
-        <RNText style={[styles.lodLabel, currentLOD === 3 && styles.activeLOD]}>
+        <RNText style={[dynamicStyles.lodLabel, currentLOD === 3 && dynamicStyles.activeLOD]}>
           L3 (x50+)
         </RNText>
       </View>
 
       {/* 計測結果表示 */}
-      <View style={styles.statsBar}>
-        <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>遷移</RNText>
-          <RNText style={styles.statValue}>
+      <View style={dynamicStyles.statsBar}>
+        <View style={dynamicStyles.statItem}>
+          <RNText style={dynamicStyles.statLabel}>遷移</RNText>
+          <RNText style={dynamicStyles.statValue}>
             {transitions.length}回{pendingCount > 0 ? ` (${pendingCount}待)` : ''}{skippedCount > 0 ? ` (${skippedCount}Skip)` : ''}
           </RNText>
         </View>
-        <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>Frame</RNText>
-          <RNText style={[styles.statValue, avgFrameMs !== '-' && parseFloat(avgFrameMs) < 100 && styles.passValue]}>
+        <View style={dynamicStyles.statItem}>
+          <RNText style={dynamicStyles.statLabel}>Frame</RNText>
+          <RNText style={[dynamicStyles.statValue, avgFrameMs !== '-' && parseFloat(avgFrameMs) < 100 && dynamicStyles.passValue]}>
             {avgFrameMs}ms
           </RNText>
         </View>
-        <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>&lt;100ms</RNText>
-          <RNText style={[styles.statValue, frameUnder100msRate !== '-' && parseFloat(frameUnder100msRate) >= 95 && styles.passValue]}>
+        <View style={dynamicStyles.statItem}>
+          <RNText style={dynamicStyles.statLabel}>&lt;100ms</RNText>
+          <RNText style={[dynamicStyles.statValue, frameUnder100msRate !== '-' && parseFloat(frameUnder100msRate) >= 95 && dynamicStyles.passValue]}>
             {frameUnder100msRate}%
           </RNText>
         </View>
-        <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>Haptic</RNText>
-          <RNText style={[styles.statValue, avgHapticMs !== '-' && parseFloat(avgHapticMs) < 50 && styles.passValue]}>
+        <View style={dynamicStyles.statItem}>
+          <RNText style={dynamicStyles.statLabel}>Haptic</RNText>
+          <RNText style={[dynamicStyles.statValue, avgHapticMs !== '-' && parseFloat(avgHapticMs) < 50 && dynamicStyles.passValue]}>
             {avgHapticMs}ms
           </RNText>
         </View>
-        <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>&lt;50ms</RNText>
-          <RNText style={[styles.statValue, hapticUnder50msRate !== '-' && parseFloat(hapticUnder50msRate) >= 95 && styles.passValue]}>
+        <View style={dynamicStyles.statItem}>
+          <RNText style={dynamicStyles.statLabel}>&lt;50ms</RNText>
+          <RNText style={[dynamicStyles.statValue, hapticUnder50msRate !== '-' && parseFloat(hapticUnder50msRate) >= 95 && dynamicStyles.passValue]}>
             {hapticUnder50msRate}%
           </RNText>
         </View>
-        <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>成功率</RNText>
-          <RNText style={[styles.statValue, hapticSuccessRate !== '-' && parseFloat(hapticSuccessRate) >= 90 && styles.passValue]}>
+        <View style={dynamicStyles.statItem}>
+          <RNText style={dynamicStyles.statLabel}>成功率</RNText>
+          <RNText style={[dynamicStyles.statValue, hapticSuccessRate !== '-' && parseFloat(hapticSuccessRate) >= 90 && dynamicStyles.passValue]}>
             {hapticSuccessRate}%
           </RNText>
         </View>
       </View>
 
       {/* 操作ガイド */}
-      <View style={styles.guideBar}>
-        <RNText style={styles.guideText}>
+      <View style={dynamicStyles.guideBar}>
+        <RNText style={dynamicStyles.guideText}>
           Pinch to change LOD level | Target: LOD &lt; 100ms, Haptics &lt; 50ms
         </RNText>
       </View>
     </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  infoBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: COLORS.bgSecondary,
-  },
-  infoText: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontFamily: 'monospace',
-  },
-  lodBadge: {
-    backgroundColor: COLORS.primary,
-    color: COLORS.bg,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    fontWeight: 'bold',
-  },
-  canvasContainer: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  lodGuide: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 8,
-    backgroundColor: COLORS.bgSecondary,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  lodLabel: {
-    color: COLORS.textTertiary,
-    fontSize: 12,
-    fontFamily: 'monospace',
-  },
-  activeLOD: {
-    color: COLORS.primary,
-    fontWeight: 'bold',
-  },
-  statsBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 8,
-    backgroundColor: COLORS.bgSecondary,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statLabel: {
-    color: COLORS.textTertiary,
-    fontSize: 10,
-  },
-  statValue: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontFamily: 'monospace',
-    fontWeight: 'bold',
-  },
-  passValue: {
-    color: COLORS.success,
-  },
-  guideBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.bgSecondary,
-    alignItems: 'center',
-  },
-  guideText: {
-    color: COLORS.textTertiary,
-    fontSize: 12,
-  },
-});
 
 export default LODTest;

@@ -20,7 +20,7 @@
  */
 
 import { Canvas, Rect, Circle, Group, Text, useFont, Line, vec } from '@shopify/react-native-skia';
-import { View, StyleSheet, Dimensions, Text as RNText } from 'react-native';
+import { View, Dimensions, Text as RNText } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   useSharedValue,
@@ -33,7 +33,8 @@ import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import type { Transforms3d } from '@shopify/react-native-skia';
 import { MOCK_EVENTS, ERAS, EVENT_STATS, DENSE_STATS, yearToX, type HistoricalEvent } from '../../data/mockEvents';
 
-import { CATEGORY_COLORS, getColors } from '@/constants/tokens';
+import { CATEGORY_COLORS } from '@/constants/tokens';
+import { useTheme } from '@/hooks/useTheme';
 
 // フォント
 const ROBOTO_FONT = require('../../assets/fonts/Roboto-Medium.ttf');
@@ -55,9 +56,6 @@ const TIMELINE_END_YEAR = 2030;
 // L0_L1: 2   - x2 で L1 に遷移
 // L1_L2: 10  - x10 で L2 に遷移
 // L2_L3: 50  - x50 で L3 に遷移
-
-// ダークテーマのカラーを取得（PoC はダークモード固定）
-const COLORS = getColors('dark');
 
 // マーカーサイズ（重要度別）
 const MARKER_SIZES = {
@@ -213,6 +211,91 @@ export function DenseRenderTest({
   width = SCREEN_WIDTH,
   height = 400
 }: DenseRenderTestProps) {
+  // テーマから色とトークンを取得（動的テーマ対応）
+  const { colors, spacing, typography, radius } = useTheme();
+
+  // 動的スタイル（テーマ変更時に再計算）
+  const dynamicStyles = useMemo(() => ({
+    container: { flex: 1, backgroundColor: colors.bg },
+    infoBar: {
+      flexDirection: 'row' as const,
+      justifyContent: 'space-between' as const,
+      alignItems: 'center' as const,
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[2],
+      backgroundColor: colors.bgSecondary,
+    },
+    infoText: {
+      color: colors.text,
+      fontSize: typography.size.base,
+      fontFamily: typography.family.mono,
+    },
+    lodBadge: {
+      backgroundColor: colors.primary,
+      color: colors.bg,
+      paddingHorizontal: spacing[2],
+      paddingVertical: spacing[1],
+      borderRadius: radius.sm,
+      overflow: 'hidden' as const,
+      fontWeight: typography.weight.semibold,
+    },
+    statsBar: {
+      flexDirection: 'row' as const,
+      justifyContent: 'space-around' as const,
+      paddingVertical: spacing[2],
+      backgroundColor: colors.bgSecondary,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    statItem: { alignItems: 'center' as const },
+    statLabel: {
+      color: colors.textTertiary,
+      fontSize: typography.size.xs,
+    },
+    statValue: {
+      color: colors.text,
+      fontSize: typography.size.base,
+      fontWeight: typography.weight.semibold,
+    },
+    highlightValue: { color: colors.primary },
+    passValue: { color: colors.primary },
+    failValue: { color: colors.error },
+    canvasContainer: { flex: 1, overflow: 'hidden' as const },
+    lodGuide: {
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[1],
+      backgroundColor: colors.bgSecondary,
+    },
+    lodGuideText: {
+      color: colors.textTertiary,
+      fontSize: typography.size.xs,
+      textAlign: 'center' as const,
+    },
+    guideBar: {
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[3],
+      backgroundColor: colors.bgSecondary,
+      alignItems: 'center' as const,
+    },
+    guideText: {
+      color: colors.textTertiary,
+      fontSize: typography.size.sm,
+    },
+    labelStatsBar: {
+      paddingHorizontal: spacing[4],
+      paddingVertical: spacing[1],
+      backgroundColor: colors.bgTertiary,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    labelStatsText: {
+      color: colors.info,
+      fontSize: typography.size.xs,
+      textAlign: 'center' as const,
+      fontFamily: typography.family.mono,
+    },
+  }), [colors, spacing, typography, radius]);
+
   const font = useFont(ROBOTO_FONT, 10);
   const labelFont = useFont(ROBOTO_FONT, 12);
   const eventLabelFont = useFont(ROBOTO_FONT, LABEL_CONFIG.fontSize);
@@ -498,7 +581,7 @@ export function DenseRenderTest({
             y={0}
             text={era.name}
             font={labelFont}
-            color={COLORS.text}
+            color={colors.text}
           />
         </Group>
       );
@@ -558,7 +641,7 @@ export function DenseRenderTest({
             y={0}
             text={displayTitle}
             font={eventLabelFont}
-            color={COLORS.text}
+            color={colors.text}
           />
         </Group>
       );
@@ -583,7 +666,7 @@ export function DenseRenderTest({
           key={`year-line-${year}`}
           p1={vec(x, height - 30 / currentZoom)}
           p2={vec(x, height - 20 / currentZoom)}
-          color={COLORS.textTertiary}
+          color={colors.textTertiary}
           strokeWidth={1 / currentZoom}
         />
       );
@@ -603,7 +686,7 @@ export function DenseRenderTest({
             y={0}
             text={`${year}`}
             font={font}
-            color={COLORS.textTertiary}
+            color={colors.textTertiary}
           />
         </Group>
       );
@@ -619,50 +702,50 @@ export function DenseRenderTest({
       y={height / 2 - 1 / currentZoom}
       width={timelineWidth}
       height={2 / currentZoom}
-      color={COLORS.primary}
+      color={colors.primary}
     />
   );
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <GestureHandlerRootView style={dynamicStyles.container}>
       {/* 情報バー */}
-      <View style={styles.infoBar}>
-        <RNText style={styles.infoText}>
+      <View style={dynamicStyles.infoBar}>
+        <RNText style={dynamicStyles.infoText}>
           Zoom: x{currentZoom.toFixed(1)}
         </RNText>
-        <RNText style={[styles.infoText, styles.lodBadge]}>
+        <RNText style={[dynamicStyles.infoText, dynamicStyles.lodBadge]}>
           LOD: L{currentLOD}
         </RNText>
-        <RNText style={styles.infoText}>
+        <RNText style={dynamicStyles.infoText}>
           Drops: {frameStats.drops} ({frameStats.rate}%)
         </RNText>
       </View>
 
       {/* 統計バー */}
-      <View style={styles.statsBar}>
-        <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>Total</RNText>
-          <RNText style={styles.statValue}>{EVENT_STATS.total}</RNText>
+      <View style={dynamicStyles.statsBar}>
+        <View style={dynamicStyles.statItem}>
+          <RNText style={dynamicStyles.statLabel}>Total</RNText>
+          <RNText style={dynamicStyles.statValue}>{EVENT_STATS.total}</RNText>
         </View>
-        <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>Rendered</RNText>
-          <RNText style={[styles.statValue, styles.highlightValue]}>{renderStats.rendered}</RNText>
+        <View style={dynamicStyles.statItem}>
+          <RNText style={dynamicStyles.statLabel}>Rendered</RNText>
+          <RNText style={[dynamicStyles.statValue, dynamicStyles.highlightValue]}>{renderStats.rendered}</RNText>
         </View>
-        <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>Culled</RNText>
-          <RNText style={styles.statValue}>{renderStats.culled}</RNText>
+        <View style={dynamicStyles.statItem}>
+          <RNText style={dynamicStyles.statLabel}>Culled</RNText>
+          <RNText style={dynamicStyles.statValue}>{renderStats.culled}</RNText>
         </View>
-        <View style={styles.statItem}>
-          <RNText style={styles.statLabel}>50/10yr</RNText>
-          <RNText style={[styles.statValue, DENSE_STATS.valid ? styles.passValue : styles.failValue]}>
+        <View style={dynamicStyles.statItem}>
+          <RNText style={dynamicStyles.statLabel}>50/10yr</RNText>
+          <RNText style={[dynamicStyles.statValue, DENSE_STATS.valid ? dynamicStyles.passValue : dynamicStyles.failValue]}>
             {DENSE_STATS.valid ? 'PASS' : 'FAIL'}
           </RNText>
         </View>
       </View>
 
       {/* マーカー・ラベル統計バー */}
-      <View style={styles.labelStatsBar}>
-        <RNText style={styles.labelStatsText}>
+      <View style={dynamicStyles.labelStatsBar}>
+        <RNText style={dynamicStyles.labelStatsText}>
           Markers: {markerStats.visible}/{markerStats.visible + markerStats.culled} ({markerStats.rate}%)
           {currentLOD >= 2 && ` | Labels: ${labelStats.visible}/${labelStats.visible + labelStats.culled} (${labelStats.rate}%)`}
         </RNText>
@@ -670,11 +753,11 @@ export function DenseRenderTest({
 
       {/* Canvas */}
       <GestureDetector gesture={composedGesture}>
-        <View style={styles.canvasContainer}>
+        <View style={dynamicStyles.canvasContainer}>
           <Canvas style={{ width, height }}>
             <Group transform={transform}>
               {/* 背景 */}
-              <Rect x={0} y={0} width={timelineWidth} height={height} color={COLORS.bg} />
+              <Rect x={0} y={0} width={timelineWidth} height={height} color={colors.bg} />
 
               {/* 時代帯 */}
               {renderEraBands()}
@@ -699,115 +782,20 @@ export function DenseRenderTest({
       </GestureDetector>
 
       {/* LOD ガイド */}
-      <View style={styles.lodGuide}>
-        <RNText style={styles.lodGuideText}>
+      <View style={dynamicStyles.lodGuide}>
+        <RNText style={dynamicStyles.lodGuideText}>
           L0 (x1-2): Era only | L1 (x2-10): +Major | L2 (x10-50): +Medium | L3 (x50+): +Minor
         </RNText>
       </View>
 
       {/* 操作ガイド */}
-      <View style={styles.guideBar}>
-        <RNText style={styles.guideText}>
+      <View style={dynamicStyles.guideBar}>
+        <RNText style={dynamicStyles.guideText}>
           Pinch: Zoom | Drag: Scroll | {visibleEventCount} events visible
         </RNText>
       </View>
     </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  infoBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: COLORS.bgSecondary,
-  },
-  infoText: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontFamily: 'monospace',
-  },
-  lodBadge: {
-    backgroundColor: COLORS.primary,
-    color: COLORS.bg,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    overflow: 'hidden',
-    fontWeight: '600',
-  },
-  statsBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 8,
-    backgroundColor: COLORS.bgSecondary,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statLabel: {
-    color: COLORS.textTertiary,
-    fontSize: 10,
-  },
-  statValue: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  highlightValue: {
-    color: COLORS.primary,
-  },
-  passValue: {
-    color: COLORS.primary,
-  },
-  failValue: {
-    color: COLORS.error,
-  },
-  canvasContainer: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  lodGuide: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: COLORS.bgSecondary,
-  },
-  lodGuideText: {
-    color: COLORS.textTertiary,
-    fontSize: 10,
-    textAlign: 'center',
-  },
-  guideBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.bgSecondary,
-    alignItems: 'center',
-  },
-  guideText: {
-    color: COLORS.textTertiary,
-    fontSize: 12,
-  },
-  labelStatsBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: COLORS.bgTertiary,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  labelStatsText: {
-    color: COLORS.info,
-    fontSize: 11,
-    textAlign: 'center',
-    fontFamily: 'monospace',
-  },
-});
 
 export default DenseRenderTest;

@@ -1,110 +1,113 @@
-/**
- * Settings Store - ユーザー設定管理（AsyncStorage同期）
- * Sprint 1: 014 State Management
- */
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { create } from "zustand";
 
-import { create } from 'zustand';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { SettingsState, ThemeMode, LayerVisibility } from '@/types/store';
-import { DEFAULT_LAYER_VISIBILITY } from '@/types/store';
+import type { LayerType, SettingsState, ThemeMode } from "@/types/store";
 
-const STORAGE_KEY = '@jidaiscope/settings';
+const STORAGE_KEY = "settings";
 
-interface StoredSettings {
-  hapticEnabled: boolean;
-  theme: ThemeMode;
-  visibleLayers: LayerVisibility;
-}
-
-const DEFAULT_SETTINGS: StoredSettings = {
-  hapticEnabled: true,
-  theme: 'system',
-  visibleLayers: DEFAULT_LAYER_VISIBILITY,
+const DEFAULT_VISIBLE_LAYERS: Record<LayerType, boolean> = {
+  era: true,
+  events: true,
+  emperor: true,
+  shogun: true,
+  person: true,
 };
 
-export const useSettingsStore = create<SettingsState>((set, get) => ({
-  // Initial State
-  hapticEnabled: DEFAULT_SETTINGS.hapticEnabled,
-  theme: DEFAULT_SETTINGS.theme,
-  visibleLayers: DEFAULT_SETTINGS.visibleLayers,
-  isLoaded: false,
+const DEFAULT_SETTINGS = {
+  hapticEnabled: true,
+  theme: "system" as ThemeMode,
+  visibleLayers: DEFAULT_VISIBLE_LAYERS,
+};
 
-  // Actions
-  toggleHaptic: () => {
-    set((state) => {
-      const newValue = !state.hapticEnabled;
-      saveSettings({ ...getStoredSettings(state), hapticEnabled: newValue });
-      return { hapticEnabled: newValue };
-    });
-  },
+type SettingsSnapshot = Pick<
+  SettingsState,
+  "hapticEnabled" | "theme" | "visibleLayers"
+>;
 
-  setTheme: (theme) => {
-    set((state) => {
-      saveSettings({ ...getStoredSettings(state), theme });
-      return { theme };
-    });
-  },
+const sanitizeTheme = (value: unknown): ThemeMode => {
+  if (value === "light" || value === "dark" || value === "system") return value;
+  return DEFAULT_SETTINGS.theme;
+};
 
-  toggleLayer: (layer) => {
-    set((state) => {
-      const newLayers = {
-        ...state.visibleLayers,
-        [layer]: !state.visibleLayers[layer],
-      };
-      saveSettings({ ...getStoredSettings(state), visibleLayers: newLayers });
-      return { visibleLayers: newLayers };
-    });
-  },
-
-  loadSettings: async () => {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Partial<StoredSettings>;
-        set({
-          hapticEnabled: parsed.hapticEnabled ?? DEFAULT_SETTINGS.hapticEnabled,
-          theme: parsed.theme ?? DEFAULT_SETTINGS.theme,
-          visibleLayers: {
-            ...DEFAULT_SETTINGS.visibleLayers,
-            ...parsed.visibleLayers,
-          },
-          isLoaded: true,
-        });
-      } else {
-        set({ isLoaded: true });
-      }
-    } catch (error) {
-      console.error('[settingsStore] Failed to load settings:', error);
-      set({ isLoaded: true });
-    }
-  },
-}));
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-function getStoredSettings(state: SettingsState): StoredSettings {
+const sanitizeVisibleLayers = (value: unknown): Record<LayerType, boolean> => {
+  if (!value || typeof value !== "object") return { ...DEFAULT_VISIBLE_LAYERS };
+  const layerRecord = value as Record<string, unknown>;
   return {
-    hapticEnabled: state.hapticEnabled,
-    theme: state.theme,
-    visibleLayers: state.visibleLayers,
+    era: Boolean(layerRecord.era ?? DEFAULT_VISIBLE_LAYERS.era),
+    events: Boolean(layerRecord.events ?? DEFAULT_VISIBLE_LAYERS.events),
+    emperor: Boolean(layerRecord.emperor ?? DEFAULT_VISIBLE_LAYERS.emperor),
+    shogun: Boolean(layerRecord.shogun ?? DEFAULT_VISIBLE_LAYERS.shogun),
+    person: Boolean(layerRecord.person ?? DEFAULT_VISIBLE_LAYERS.person),
   };
-}
+};
 
-async function saveSettings(settings: StoredSettings): Promise<void> {
+const loadSettingsFromStorage = async (): Promise<SettingsSnapshot> => {
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch (error) {
-    console.error('[settingsStore] Failed to save settings:', error);
+    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!stored) return { ...DEFAULT_SETTINGS };
+    const parsed = JSON.parse(stored) as Partial<SettingsSnapshot>;
+    return {
+      hapticEnabled:
+        typeof parsed.hapticEnabled === "boolean"
+          ? parsed.hapticEnabled
+          : DEFAULT_SETTINGS.hapticEnabled,
+      theme: sanitizeTheme(parsed.theme),
+      visibleLayers: sanitizeVisibleLayers(parsed.visibleLayers),
+    };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
   }
-}
+};
 
-// =============================================================================
-// Selectors
-// =============================================================================
+const persistSettings = async (snapshot: SettingsSnapshot): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Ignore persistence failures to avoid blocking UI.
+  }
+};
 
-export const selectHapticEnabled = (state: SettingsState) => state.hapticEnabled;
-export const selectTheme = (state: SettingsState) => state.theme;
-export const selectVisibleLayers = (state: SettingsState) => state.visibleLayers;
-export const selectIsSettingsLoaded = (state: SettingsState) => state.isLoaded;
+export const useSettingsStore = create<SettingsState>((set, get) => {
+  const hydrate = async () => {
+    const stored = await loadSettingsFromStorage();
+    set(stored);
+  };
+
+  void hydrate();
+
+  return {
+    ...DEFAULT_SETTINGS,
+
+    toggleHaptic: () => {
+      const next = !get().hapticEnabled;
+      set({ hapticEnabled: next });
+      void persistSettings({
+        hapticEnabled: next,
+        theme: get().theme,
+        visibleLayers: get().visibleLayers,
+      });
+    },
+
+    setTheme: (theme: ThemeMode) => {
+      set({ theme });
+      void persistSettings({
+        hapticEnabled: get().hapticEnabled,
+        theme,
+        visibleLayers: get().visibleLayers,
+      });
+    },
+
+    toggleLayer: (type: LayerType) => {
+      const nextLayers = {
+        ...get().visibleLayers,
+        [type]: !get().visibleLayers[type],
+      };
+      set({ visibleLayers: nextLayers });
+      void persistSettings({
+        hapticEnabled: get().hapticEnabled,
+        theme: get().theme,
+        visibleLayers: nextLayers,
+      });
+    },
+  };
+});

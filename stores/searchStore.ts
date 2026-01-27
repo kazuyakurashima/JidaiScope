@@ -1,57 +1,69 @@
-/**
- * Search Store - 検索履歴・結果キャッシュ管理
- * Sprint 1: 014 State Management
- */
+import { create } from "zustand";
 
-import { create } from 'zustand';
-import type { SearchState, SearchResult } from '@/types/store';
-import { MAX_SEARCH_HISTORY, MAX_SEARCH_RESULTS_CACHE } from '@/types/store';
+import type { SearchState } from "@/types/store";
 
-export const useSearchStore = create<SearchState>((set, get) => ({
-  // Initial State
+const MAX_HISTORY = 50;
+const MAX_CACHE = 50;
+
+const normalizeKeyword = (keyword: string): string => keyword.trim();
+
+const updateHistory = (history: string[], keyword: string): string[] => {
+  const normalized = normalizeKeyword(keyword);
+  if (!normalized) return history;
+  const next = [normalized, ...history.filter((item) => item !== normalized)];
+  return next.slice(0, MAX_HISTORY);
+};
+
+const pruneCache = (
+  results: Record<string, string[]>,
+  history: string[],
+): Record<string, string[]> => {
+  const keys = Object.keys(results);
+  if (keys.length <= MAX_CACHE) return results;
+
+  const allowed = new Set(history.slice(0, MAX_CACHE));
+  const pruned: Record<string, string[]> = {};
+  for (const key of keys) {
+    if (allowed.has(key)) {
+      pruned[key] = results[key];
+    }
+  }
+  return pruned;
+};
+
+export const useSearchStore = create<SearchState>((set) => ({
   searchHistory: [],
-  searchResults: [],
-  currentKeyword: '',
-  isSearching: false,
+  searchResults: {},
+  currentKeyword: "",
 
-  // Actions
-  setKeyword: (keyword) => set({ currentKeyword: keyword }),
-
-  setResults: (results) => {
-    // 最大件数を超えないようにトリム
-    const trimmedResults = results.slice(0, MAX_SEARCH_RESULTS_CACHE);
-    set({
-      searchResults: trimmedResults,
-      isSearching: false,
-    });
-  },
-
-  addToHistory: (keyword) => {
-    if (!keyword.trim()) return;
-
-    set((state) => {
-      // 重複を除去して先頭に追加
-      const filtered = state.searchHistory.filter((k) => k !== keyword);
-      const updated = [keyword, ...filtered].slice(0, MAX_SEARCH_HISTORY);
-      return { searchHistory: updated };
-    });
+  search: (keyword: string) => {
+    const normalized = normalizeKeyword(keyword);
+    if (!normalized) {
+      set({ currentKeyword: "" });
+      return;
+    }
+    set((state) => ({
+      currentKeyword: normalized,
+      searchHistory: updateHistory(state.searchHistory, normalized),
+    }));
   },
 
   clearHistory: () => set({ searchHistory: [] }),
 
-  clearResults: () =>
-    set({
-      searchResults: [],
-      currentKeyword: '',
-      isSearching: false,
-    }),
+  cacheResults: (keyword: string, results: string[]) => {
+    const normalized = normalizeKeyword(keyword);
+    if (!normalized) return;
+    set((state) => {
+      const nextHistory = updateHistory(state.searchHistory, normalized);
+      const nextResults = {
+        ...state.searchResults,
+        [normalized]: results,
+      };
+      return {
+        currentKeyword: normalized,
+        searchHistory: nextHistory,
+        searchResults: pruneCache(nextResults, nextHistory),
+      };
+    });
+  },
 }));
-
-// =============================================================================
-// Selectors
-// =============================================================================
-
-export const selectSearchResults = (state: SearchState) => state.searchResults;
-export const selectSearchHistory = (state: SearchState) => state.searchHistory;
-export const selectCurrentKeyword = (state: SearchState) => state.currentKeyword;
-export const selectIsSearching = (state: SearchState) => state.isSearching;

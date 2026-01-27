@@ -1,84 +1,74 @@
-/**
- * Bookmark Store - ブックマーク管理（AsyncStorage同期）
- * Sprint 1: 014 State Management
- */
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { create } from "zustand";
 
-import { create } from 'zustand';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { BookmarkState } from '@/types/store';
-import { MAX_BOOKMARKS } from '@/types/store';
+import type { BookmarkState } from "@/types/store";
 
-const STORAGE_KEY = '@jidaiscope/bookmarks';
+const STORAGE_KEY = "bookmarks";
+const MAX_BOOKMARKS = 100;
 
-export const useBookmarkStore = create<BookmarkState>((set, get) => ({
-  // Initial State
-  bookmarks: [],
-  isLoaded: false,
-
-  // Actions
-  loadBookmarks: async () => {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as string[];
-        set({ bookmarks: parsed, isLoaded: true });
-      } else {
-        set({ isLoaded: true });
-      }
-    } catch (error) {
-      console.error('[bookmarkStore] Failed to load bookmarks:', error);
-      set({ isLoaded: true });
+const sanitizeBookmarks = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const unique = new Set<string>();
+  for (const item of value) {
+    if (typeof item === "string" && item.trim().length > 0) {
+      unique.add(item);
     }
-  },
+  }
+  return Array.from(unique).slice(0, MAX_BOOKMARKS);
+};
 
-  addBookmark: async (id) => {
-    const state = get();
-    if (state.bookmarks.includes(id)) return;
+const loadBookmarksFromStorage = async (): Promise<string[]> => {
+  try {
+    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!stored) return [];
+    return sanitizeBookmarks(JSON.parse(stored));
+  } catch {
+    return [];
+  }
+};
 
-    // 最大件数チェック
-    const updated = [...state.bookmarks, id].slice(-MAX_BOOKMARKS);
+const persistBookmarks = async (bookmarks: string[]): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
+  } catch {
+    // Ignore persistence failures to avoid blocking UI.
+  }
+};
 
-    set({ bookmarks: updated });
+export const useBookmarkStore = create<BookmarkState>((set, get) => {
+  const hydrate = async () => {
+    const stored = await loadBookmarksFromStorage();
+    set({ bookmarks: stored, isLoaded: true });
+  };
 
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch (error) {
-      console.error('[bookmarkStore] Failed to save bookmark:', error);
-    }
-  },
+  void hydrate();
 
-  removeBookmark: async (id) => {
-    const state = get();
-    const updated = state.bookmarks.filter((bid) => bid !== id);
+  return {
+    bookmarks: [],
+    isLoaded: false,
 
-    set({ bookmarks: updated });
+    loadBookmarks: async () => {
+      const stored = await loadBookmarksFromStorage();
+      set({ bookmarks: stored, isLoaded: true });
+    },
 
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch (error) {
-      console.error('[bookmarkStore] Failed to remove bookmark:', error);
-    }
-  },
+    addBookmark: async (id: string) => {
+      const trimmed = id.trim();
+      if (!trimmed) return;
+      const next = [trimmed, ...get().bookmarks.filter((item) => item !== trimmed)].slice(
+        0,
+        MAX_BOOKMARKS,
+      );
+      set({ bookmarks: next });
+      await persistBookmarks(next);
+    },
 
-  isBookmarked: (id) => {
-    return get().bookmarks.includes(id);
-  },
+    removeBookmark: async (id: string) => {
+      const next = get().bookmarks.filter((item) => item !== id);
+      set({ bookmarks: next });
+      await persistBookmarks(next);
+    },
 
-  clearAll: async () => {
-    set({ bookmarks: [] });
-
-    try {
-      await AsyncStorage.removeItem(STORAGE_KEY);
-    } catch (error) {
-      console.error('[bookmarkStore] Failed to clear bookmarks:', error);
-    }
-  },
-}));
-
-// =============================================================================
-// Selectors
-// =============================================================================
-
-export const selectBookmarks = (state: BookmarkState) => state.bookmarks;
-export const selectBookmarkCount = (state: BookmarkState) => state.bookmarks.length;
-export const selectIsBookmarksLoaded = (state: BookmarkState) => state.isLoaded;
+    getBookmarks: () => get().bookmarks,
+  };
+});

@@ -17,3 +17,6 @@ export { useAppStore, useIsPro } from './appStore';
 
 // Settings Store
 export { useSettingsStore } from './settingsStore';
+
+// IAP Store
+export { useIapStore, useIsPurchased } from './iapStore';

@@ -1,42 +1,40 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Theme Constants - Design Tokensへのブリッジ
+ *
+ * Note: このファイルは互換性のために残されています。
+ * 新しいコードでは @/constants/tokens と @/hooks/useTheme を使用してください。
  */
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+import { getColors, TYPOGRAPHY } from './tokens';
 
+// 旧フォーマットとの互換性のためのColors export
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    text: getColors('light').text,
+    background: getColors('light').bg,
+    tint: getColors('light').primary,
+    icon: getColors('light').textSecondary,
+    tabIconDefault: getColors('light').textTertiary,
+    tabIconSelected: getColors('light').primary,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
+    text: getColors('dark').text,
+    background: getColors('dark').bg,
+    tint: getColors('dark').primary,
+    icon: getColors('dark').textSecondary,
+    tabIconDefault: getColors('dark').textTertiary,
+    tabIconSelected: getColors('dark').primary,
   },
 };
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
+    sans: TYPOGRAPHY.family.base,
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+    mono: TYPOGRAPHY.family.mono,
   },
   default: {
     sans: 'normal',

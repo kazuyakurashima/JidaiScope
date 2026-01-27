@@ -1,6 +1,6 @@
-import { StyleSheet, Text, type TextProps } from 'react-native';
+import { Text, type TextProps } from 'react-native';
 
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { useTheme } from '@/hooks/useTheme';
 
 export type ThemedTextProps = TextProps & {
   lightColor?: string;
@@ -15,46 +15,59 @@ export function ThemedText({
   type = 'default',
   ...rest
 }: ThemedTextProps) {
-  const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+  const { colors, typography } = useTheme();
+
+  // カスタムカラーまたはテーマのテキストカラーを使用
+  const textColor = lightColor || darkColor || colors.text;
+  // リンク用のカラー
+  const linkColor = colors.accent;
+
+  // Typography トークンからスタイルを生成
+  const getTypeStyle = () => {
+    switch (type) {
+      case 'title':
+        return {
+          fontSize: typography.size['5xl'],
+          fontWeight: typography.weight.bold,
+          lineHeight: typography.size['5xl'] * typography.lineHeight.tight,
+        };
+      case 'subtitle':
+        return {
+          fontSize: typography.size['2xl'],
+          fontWeight: typography.weight.bold,
+          lineHeight: typography.size['2xl'] * typography.lineHeight.normal,
+        };
+      case 'defaultSemiBold':
+        return {
+          fontSize: typography.size.lg,
+          lineHeight: typography.size.lg * typography.lineHeight.normal,
+          fontWeight: typography.weight.semibold,
+        };
+      case 'link':
+        return {
+          fontSize: typography.size.lg,
+          lineHeight: typography.size.lg * typography.lineHeight.relaxed,
+        };
+      case 'default':
+      default:
+        return {
+          fontSize: typography.size.lg,
+          lineHeight: typography.size.lg * typography.lineHeight.normal,
+        };
+    }
+  };
+
+  const typeStyle = getTypeStyle();
+  const color = type === 'link' ? linkColor : textColor;
 
   return (
     <Text
       style={[
         { color },
-        type === 'default' ? styles.default : undefined,
-        type === 'title' ? styles.title : undefined,
-        type === 'defaultSemiBold' ? styles.defaultSemiBold : undefined,
-        type === 'subtitle' ? styles.subtitle : undefined,
-        type === 'link' ? styles.link : undefined,
+        typeStyle,
         style,
       ]}
       {...rest}
     />
   );
 }
-
-const styles = StyleSheet.create({
-  default: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  defaultSemiBold: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '600',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    lineHeight: 32,
-  },
-  subtitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  link: {
-    lineHeight: 30,
-    fontSize: 16,
-    color: '#0a7ea4',
-  },
-});

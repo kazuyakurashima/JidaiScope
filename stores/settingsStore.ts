@@ -1,3 +1,8 @@
+/**
+ * Settings Store - ユーザー設定管理
+ * Sprint 1: 014 State Management
+ */
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 
@@ -19,10 +24,7 @@ const DEFAULT_SETTINGS = {
   visibleLayers: DEFAULT_VISIBLE_LAYERS,
 };
 
-type SettingsSnapshot = Pick<
-  SettingsState,
-  "hapticEnabled" | "theme" | "visibleLayers"
->;
+type SettingsSnapshot = Pick<SettingsState, "hapticEnabled" | "theme" | "visibleLayers">;
 
 const sanitizeTheme = (value: unknown): ThemeMode => {
   if (value === "light" || value === "dark" || value === "system") return value;
@@ -67,18 +69,33 @@ const persistSettings = async (snapshot: SettingsSnapshot): Promise<void> => {
   }
 };
 
+// Hydration promise to prevent race conditions
+let hydratePromise: Promise<void> | null = null;
+let isHydrated = false;
+
 export const useSettingsStore = create<SettingsState>((set, get) => {
   const hydrate = async () => {
     const stored = await loadSettingsFromStorage();
-    set(stored);
+    // Use functional update to avoid overwriting any changes made during hydration
+    set((state) => {
+      // If already hydrated by another call, don't overwrite
+      if (isHydrated) return state;
+      isHydrated = true;
+      return stored;
+    });
   };
 
-  void hydrate();
+  hydratePromise = hydrate();
 
   return {
     ...DEFAULT_SETTINGS,
 
-    toggleHaptic: () => {
+    toggleHaptic: async () => {
+      // Wait for initial hydration to complete
+      if (hydratePromise) {
+        await hydratePromise;
+      }
+
       const next = !get().hapticEnabled;
       set({ hapticEnabled: next });
       void persistSettings({
@@ -88,7 +105,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       });
     },
 
-    setTheme: (theme: ThemeMode) => {
+    setTheme: async (theme: ThemeMode) => {
+      // Wait for initial hydration to complete
+      if (hydratePromise) {
+        await hydratePromise;
+      }
+
       set({ theme });
       void persistSettings({
         hapticEnabled: get().hapticEnabled,
@@ -97,7 +119,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       });
     },
 
-    toggleLayer: (type: LayerType) => {
+    toggleLayer: async (type: LayerType) => {
+      // Wait for initial hydration to complete
+      if (hydratePromise) {
+        await hydratePromise;
+      }
+
       const nextLayers = {
         ...get().visibleLayers,
         [type]: !get().visibleLayers[type],

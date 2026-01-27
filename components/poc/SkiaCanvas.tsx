@@ -13,33 +13,19 @@
 import { Canvas, Rect, Circle, Group, Text, useFont, Line, vec } from '@shopify/react-native-skia';
 import { View, StyleSheet, Dimensions } from 'react-native';
 
+import { ERA_COLORS, getColors } from '@/constants/tokens';
+
 // Roboto フォント（ローカルアセット、相対パスでMetro解決の安定性を確保）
 // Note: 本番では NotoSansJP などの日本語フォントを assets/fonts に配置
 const ROBOTO_FONT = require('../../assets/fonts/Roboto-Medium.ttf');
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// 時代カラー（PRD セクション 11.2）
-const ERA_COLORS = {
-  jomon: '#8B7355',      // 縄文
-  yayoi: '#D4A574',      // 弥生
-  kofun: '#B8860B',      // 古墳
-  asuka: '#CD853F',      // 飛鳥
-  nara: '#DAA520',       // 奈良
-  heian: '#9370DB',      // 平安
-  kamakura: '#4682B4',   // 鎌倉
-  muromachi: '#2E8B57',  // 室町
-  sengoku: '#DC143C',    // 戦国
-  azuchi: '#FF8C00',     // 安土桃山
-  edo: '#4169E1',        // 江戸
-  meiji: '#228B22',      // 明治
-  taisho: '#9932CC',     // 大正
-  showa: '#1E90FF',      // 昭和
-  heisei: '#FF69B4',     // 平成
-  reiwa: '#00CED1',      // 令和
-};
+// ダークテーマのカラーを取得（PoC はダークモード固定）
+const COLORS = getColors('dark');
 
 // テスト用の時代データ（英語ラベル: PoC用、日本語フォント未導入のため）
+// Note: ERA_COLORS は tokens.ts から import（15時代、reiwa なし）
 const TEST_ERAS = [
   { name: 'Jomon', color: ERA_COLORS.jomon, width: 100 },
   { name: 'Yayoi', color: ERA_COLORS.yayoi, width: 80 },
@@ -100,7 +86,7 @@ export function SkiaCanvas({
           cx={50 + i * 30}
           cy={height / 2}
           r={8}
-          color="#F7FAFC"
+          color={COLORS.text}
           style="fill"
         />
       );
@@ -122,7 +108,7 @@ export function SkiaCanvas({
           y={height - 20}
           text={era.name}
           font={labelFont}
-          color="#F7FAFC"
+          color={COLORS.text}
         />
       );
       x += era.width;
@@ -140,7 +126,7 @@ export function SkiaCanvas({
           key={`line-${i}`}
           p1={vec(x, height - 30)}
           p2={vec(x, height - 15)}
-          color="#718096"
+          color={COLORS.textTertiary}
           strokeWidth={1}
         />
       );
@@ -158,7 +144,7 @@ export function SkiaCanvas({
             y={0}
             width={width}
             height={height}
-            color="#0A0E14"
+            color={COLORS.bg}
           />
 
           {/* 時代帯 */}
@@ -173,7 +159,7 @@ export function SkiaCanvas({
             y={height / 2 - 1}
             width={width}
             height={2}
-            color="#4FD1C5"
+            color={COLORS.primary}
             opacity={0.8}
           />
 
@@ -190,7 +176,7 @@ export function SkiaCanvas({
               y={20}
               text="Phase 1: Rect / Circle / Line / Text"
               font={font}
-              color="#4FD1C5"
+              color={COLORS.primary}
             />
           )}
         </Group>
@@ -201,7 +187,7 @@ export function SkiaCanvas({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#0A0E14',
+    backgroundColor: COLORS.bg,
     borderRadius: 8,
     overflow: 'hidden',
   },

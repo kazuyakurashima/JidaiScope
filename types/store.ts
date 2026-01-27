@@ -38,6 +38,17 @@ export interface AppState {
   setProUnlocked: (unlocked: boolean) => void;
 }
 
+export type PurchaseStatus = "none" | "pending" | "purchased" | "restored";
+
+export interface IapState {
+  purchaseStatus: PurchaseStatus;
+  isProcessing: boolean;
+
+  setPurchaseStatus: (status: PurchaseStatus) => void;
+  setProcessing: (processing: boolean) => void;
+  resetPurchase: () => void;
+}
+
 export type ThemeMode = "system" | "light" | "dark";
 export type LayerType = "era" | "events" | "emperor" | "shogun" | "person";
 
@@ -46,7 +57,7 @@ export interface SettingsState {
   theme: ThemeMode;
   visibleLayers: Record<LayerType, boolean>;
 
-  toggleHaptic: () => void;
-  setTheme: (theme: ThemeMode) => void;
-  toggleLayer: (type: LayerType) => void;
+  toggleHaptic: () => Promise<void>;
+  setTheme: (theme: ThemeMode) => Promise<void>;
+  toggleLayer: (type: LayerType) => Promise<void>;
 }

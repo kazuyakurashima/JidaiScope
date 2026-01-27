@@ -38,10 +38,15 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Transforms3d } from '@shopify/react-native-skia';
 import { triggerLODHaptic, type LODLevel } from '../../utils/haptics';
 
+import { ERA_COLOR_ARRAY, getColors } from '@/constants/tokens';
+
 // フォント
 const ROBOTO_FONT = require('../../assets/fonts/Roboto-Medium.ttf');
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// ダークテーマのカラーを取得（PoC はダークモード固定）
+const COLORS = getColors('dark');
 
 // ズーム制限
 const MIN_ZOOM = 1;
@@ -54,9 +59,8 @@ const LOD_THRESHOLDS = {
   L2_L3: 50,  // x50 で L3 に遷移
 };
 
-// 時代カラー（簡略版）
-const ERA_COLORS = ['#8B7355', '#D4A574', '#9370DB', '#4682B4', '#DC143C', '#4169E1', '#228B22'];
-const ERA_NAMES = ['Jomon', 'Yayoi', 'Heian', 'Kamakura', 'Sengoku', 'Edo', 'Meiji'];
+// 時代名（ERA_COLOR_ARRAY に対応）
+const ERA_NAMES = ['Jomon', 'Yayoi', 'Kofun', 'Asuka', 'Nara', 'Heian', 'Kamakura', 'Muromachi', 'Sengoku', 'AzuchiMomoyama', 'Edo', 'Meiji', 'Taisho', 'Showa', 'Heisei'];
 
 // LOD 遷移計測結果
 // frameMs: -1 = 未計測（pending）、-2 = スキップ（連続遷移で上書き）、>= 0 = 計測完了
@@ -374,10 +378,10 @@ export function LODTest({
   // タイムラインコンテンツの幅
   const contentWidth = width * 10;
 
-  // 時代帯の描画（L0-L3 全て）
+  // 時代帯の描画（L0-L3 全て、ERA_COLOR_ARRAY は tokens.ts から import）
   const renderEraBands = () => {
-    const eraWidth = contentWidth / ERA_COLORS.length;
-    return ERA_COLORS.map((color, index) => (
+    const eraWidth = contentWidth / ERA_COLOR_ARRAY.length;
+    return ERA_COLOR_ARRAY.map((color, index) => (
       <Rect
         key={`era-${index}`}
         x={index * eraWidth}
@@ -402,7 +406,7 @@ export function LODTest({
           cx={x}
           cy={height / 2}
           r={12}
-          color="#F7FAFC"
+          color={COLORS.text}
           style="fill"
         />
       );
@@ -422,7 +426,7 @@ export function LODTest({
           cx={x}
           cy={y}
           r={8}
-          color="#4FD1C5"
+          color={COLORS.primary}
           style="fill"
         />
       );
@@ -442,7 +446,7 @@ export function LODTest({
           cx={x}
           cy={y}
           r={4}
-          color="#718096"
+          color={COLORS.textTertiary}
           style="fill"
         />
       );
@@ -462,7 +466,7 @@ export function LODTest({
         y={30}
         text={name}
         font={font}
-        color="#F7FAFC"
+        color={COLORS.text}
       />
     ));
   };
@@ -477,7 +481,7 @@ export function LODTest({
           key={`year-${i}`}
           p1={vec(x, height - 25)}
           p2={vec(x, height - 10)}
-          color="#718096"
+          color={COLORS.textTertiary}
           strokeWidth={i % 10 === 0 ? 2 : 1}
         />
       );
@@ -499,7 +503,7 @@ export function LODTest({
           y={height - 30}
           text={`${800 + i * 120}AD`}
           font={smallFont}
-          color="#A0AEC0"
+          color={COLORS.textSecondary}
         />
       );
     }
@@ -570,7 +574,7 @@ export function LODTest({
                 y={0}
                 width={contentWidth}
                 height={height}
-                color="#0A0E14"
+                color={COLORS.bg}
               />
 
               {/* 時代帯 (L0+) */}
@@ -582,7 +586,7 @@ export function LODTest({
                 y={height / 2 - 1}
                 width={contentWidth}
                 height={2}
-                color="#4FD1C5"
+                color={COLORS.primary}
               />
 
               {/* 主要イベント (L1+) - フェード+スケールアニメーション、条件付き描画 */}
@@ -682,23 +686,23 @@ export function LODTest({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0E14',
+    backgroundColor: COLORS.bg,
   },
   infoBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#1A1F2E',
+    backgroundColor: COLORS.bgSecondary,
   },
   infoText: {
-    color: '#F7FAFC',
+    color: COLORS.text,
     fontSize: 14,
     fontFamily: 'monospace',
   },
   lodBadge: {
-    backgroundColor: '#4FD1C5',
-    color: '#0A0E14',
+    backgroundColor: COLORS.primary,
+    color: COLORS.bg,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
@@ -712,51 +716,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingVertical: 8,
-    backgroundColor: '#1A1F2E',
+    backgroundColor: COLORS.bgSecondary,
     borderTopWidth: 1,
-    borderTopColor: '#2D3748',
+    borderTopColor: COLORS.border,
   },
   lodLabel: {
-    color: '#718096',
+    color: COLORS.textTertiary,
     fontSize: 12,
     fontFamily: 'monospace',
   },
   activeLOD: {
-    color: '#4FD1C5',
+    color: COLORS.primary,
     fontWeight: 'bold',
   },
   statsBar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingVertical: 8,
-    backgroundColor: '#1A1F2E',
+    backgroundColor: COLORS.bgSecondary,
     borderTopWidth: 1,
-    borderTopColor: '#2D3748',
+    borderTopColor: COLORS.border,
   },
   statItem: {
     alignItems: 'center',
   },
   statLabel: {
-    color: '#718096',
+    color: COLORS.textTertiary,
     fontSize: 10,
   },
   statValue: {
-    color: '#F7FAFC',
+    color: COLORS.text,
     fontSize: 14,
     fontFamily: 'monospace',
     fontWeight: 'bold',
   },
   passValue: {
-    color: '#48BB78',
+    color: COLORS.success,
   },
   guideBar: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#1A1F2E',
+    backgroundColor: COLORS.bgSecondary,
     alignItems: 'center',
   },
   guideText: {
-    color: '#718096',
+    color: COLORS.textTertiary,
     fontSize: 12,
   },
 });

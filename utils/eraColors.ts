@@ -22,7 +22,7 @@ export function getEraColor(eraId: string): string {
 /**
  * 時代カラーを半透明で取得（背景用）
  * @param eraId 時代ID
- * @param opacity 透明度（0-1）
+ * @param opacity 透明度（0-1、範囲外は自動クランプ）
  * @returns rgba カラー文字列
  */
 export function getEraColorWithOpacity(eraId: string, opacity: number): string {
@@ -30,7 +30,9 @@ export function getEraColorWithOpacity(eraId: string, opacity: number): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  // opacity を 0-1 の範囲にクランプ
+  const clampedOpacity = Math.max(0, Math.min(1, opacity));
+  return `rgba(${r}, ${g}, ${b}, ${clampedOpacity})`;
 }
 
 /**

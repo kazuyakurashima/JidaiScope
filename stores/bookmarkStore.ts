@@ -1,3 +1,8 @@
+/**
+ * Bookmark Store - ブックマーク管理
+ * Sprint 1: 014 State Management
+ */
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 
@@ -35,13 +40,20 @@ const persistBookmarks = async (bookmarks: string[]): Promise<void> => {
   }
 };
 
+// Hydration promise to prevent race conditions
+let hydratePromise: Promise<void> | null = null;
+
 export const useBookmarkStore = create<BookmarkState>((set, get) => {
   const hydrate = async () => {
     const stored = await loadBookmarksFromStorage();
-    set({ bookmarks: stored, isLoaded: true });
+    // Use functional update to merge with any changes made during hydration
+    set((state) => ({
+      bookmarks: state.isLoaded ? state.bookmarks : stored,
+      isLoaded: true,
+    }));
   };
 
-  void hydrate();
+  hydratePromise = hydrate();
 
   return {
     bookmarks: [],
@@ -53,6 +65,11 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => {
     },
 
     addBookmark: async (id: string) => {
+      // Wait for initial hydration to complete
+      if (hydratePromise) {
+        await hydratePromise;
+      }
+
       const trimmed = id.trim();
       if (!trimmed) return;
       const next = [trimmed, ...get().bookmarks.filter((item) => item !== trimmed)].slice(
@@ -64,6 +81,11 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => {
     },
 
     removeBookmark: async (id: string) => {
+      // Wait for initial hydration to complete
+      if (hydratePromise) {
+        await hydratePromise;
+      }
+
       const next = get().bookmarks.filter((item) => item !== id);
       set({ bookmarks: next });
       await persistBookmarks(next);

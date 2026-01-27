@@ -33,6 +33,8 @@ import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import type { Transforms3d } from '@shopify/react-native-skia';
 import { MOCK_EVENTS, ERAS, EVENT_STATS, DENSE_STATS, yearToX, type HistoricalEvent } from '../../data/mockEvents';
 
+import { CATEGORY_COLORS, getColors } from '@/constants/tokens';
+
 // フォント
 const ROBOTO_FONT = require('../../assets/fonts/Roboto-Medium.ttf');
 
@@ -49,12 +51,13 @@ const FRAME_DROP_THRESHOLD_MS = 25;
 const TIMELINE_START_YEAR = -300;  // 紀元前300年（弥生時代以降）
 const TIMELINE_END_YEAR = 2030;
 
-// LOD 閾値
-const LOD_THRESHOLDS = {
-  L0_L1: 2,   // x2 で L1 に遷移
-  L1_L2: 10,  // x10 で L2 に遷移
-  L2_L3: 50,  // x50 で L3 に遷移
-};
+// LOD 閾値 (worklet内でインライン使用)
+// L0_L1: 2   - x2 で L1 に遷移
+// L1_L2: 10  - x10 で L2 に遷移
+// L2_L3: 50  - x50 で L3 に遷移
+
+// ダークテーマのカラーを取得（PoC はダークモード固定）
+const COLORS = getColors('dark');
 
 // マーカーサイズ（重要度別）
 const MARKER_SIZES = {
@@ -63,14 +66,7 @@ const MARKER_SIZES = {
   minor: 4,
 };
 
-// マーカーカラー（カテゴリ別）
-const CATEGORY_COLORS = {
-  political: '#FF6B6B',
-  cultural: '#4ECDC4',
-  military: '#FFE66D',
-  economic: '#95E1D3',
-  social: '#DDA0DD',
-};
+// Note: CATEGORY_COLORS は tokens.ts から import
 
 // ラベル設定（最小フォント 10px 要件: 001-tech-validation.md line 174）
 const LABEL_CONFIG = {
@@ -258,14 +254,6 @@ export function DenseRenderTest({
       }
     }
   }, true);
-
-  // ズームレベルに応じた LOD 判定（React側用、非worklet）
-  const getLODLevel = useCallback((zoom: number): LODLevel => {
-    if (zoom >= LOD_THRESHOLDS.L2_L3) return 3;
-    if (zoom >= LOD_THRESHOLDS.L1_L2) return 2;
-    if (zoom >= LOD_THRESHOLDS.L0_L1) return 1;
-    return 0;
-  }, []);
 
   // ズーム更新時の LOD チェック
   // Note: worklet内ではLOD_THRESHOLDSを直接参照（外部関数呼び出し不可）
@@ -510,7 +498,7 @@ export function DenseRenderTest({
             y={0}
             text={era.name}
             font={labelFont}
-            color="#F7FAFC"
+            color={COLORS.text}
           />
         </Group>
       );
@@ -570,7 +558,7 @@ export function DenseRenderTest({
             y={0}
             text={displayTitle}
             font={eventLabelFont}
-            color="#E2E8F0"
+            color={COLORS.text}
           />
         </Group>
       );
@@ -595,7 +583,7 @@ export function DenseRenderTest({
           key={`year-line-${year}`}
           p1={vec(x, height - 30 / currentZoom)}
           p2={vec(x, height - 20 / currentZoom)}
-          color="#718096"
+          color={COLORS.textTertiary}
           strokeWidth={1 / currentZoom}
         />
       );
@@ -615,7 +603,7 @@ export function DenseRenderTest({
             y={0}
             text={`${year}`}
             font={font}
-            color="#718096"
+            color={COLORS.textTertiary}
           />
         </Group>
       );
@@ -631,7 +619,7 @@ export function DenseRenderTest({
       y={height / 2 - 1 / currentZoom}
       width={timelineWidth}
       height={2 / currentZoom}
-      color="#4FD1C5"
+      color={COLORS.primary}
     />
   );
 
@@ -686,7 +674,7 @@ export function DenseRenderTest({
           <Canvas style={{ width, height }}>
             <Group transform={transform}>
               {/* 背景 */}
-              <Rect x={0} y={0} width={timelineWidth} height={height} color="#0A0E14" />
+              <Rect x={0} y={0} width={timelineWidth} height={height} color={COLORS.bg} />
 
               {/* 時代帯 */}
               {renderEraBands()}
@@ -730,7 +718,7 @@ export function DenseRenderTest({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0E14',
+    backgroundColor: COLORS.bg,
   },
   infoBar: {
     flexDirection: 'row',
@@ -738,16 +726,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#1A1F2E',
+    backgroundColor: COLORS.bgSecondary,
   },
   infoText: {
-    color: '#F7FAFC',
+    color: COLORS.text,
     fontSize: 14,
     fontFamily: 'monospace',
   },
   lodBadge: {
-    backgroundColor: '#4FD1C5',
-    color: '#0A0E14',
+    backgroundColor: COLORS.primary,
+    color: COLORS.bg,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
@@ -758,30 +746,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingVertical: 8,
-    backgroundColor: '#1A1F2E',
+    backgroundColor: COLORS.bgSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#2D3748',
+    borderBottomColor: COLORS.border,
   },
   statItem: {
     alignItems: 'center',
   },
   statLabel: {
-    color: '#718096',
+    color: COLORS.textTertiary,
     fontSize: 10,
   },
   statValue: {
-    color: '#F7FAFC',
+    color: COLORS.text,
     fontSize: 14,
     fontWeight: '600',
   },
   highlightValue: {
-    color: '#4FD1C5',
+    color: COLORS.primary,
   },
   passValue: {
-    color: '#4FD1C5',
+    color: COLORS.primary,
   },
   failValue: {
-    color: '#FF6B6B',
+    color: COLORS.error,
   },
   canvasContainer: {
     flex: 1,
@@ -790,32 +778,32 @@ const styles = StyleSheet.create({
   lodGuide: {
     paddingHorizontal: 16,
     paddingVertical: 6,
-    backgroundColor: '#1A1F2E',
+    backgroundColor: COLORS.bgSecondary,
   },
   lodGuideText: {
-    color: '#718096',
+    color: COLORS.textTertiary,
     fontSize: 10,
     textAlign: 'center',
   },
   guideBar: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#1A1F2E',
+    backgroundColor: COLORS.bgSecondary,
     alignItems: 'center',
   },
   guideText: {
-    color: '#718096',
+    color: COLORS.textTertiary,
     fontSize: 12,
   },
   labelStatsBar: {
     paddingHorizontal: 16,
     paddingVertical: 6,
-    backgroundColor: '#1A2A3A',
+    backgroundColor: COLORS.bgTertiary,
     borderBottomWidth: 1,
-    borderBottomColor: '#2D3748',
+    borderBottomColor: COLORS.border,
   },
   labelStatsText: {
-    color: '#4ECDC4',
+    color: COLORS.info,
     fontSize: 11,
     textAlign: 'center',
     fontFamily: 'monospace',

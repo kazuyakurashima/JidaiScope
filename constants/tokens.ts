@@ -3,8 +3,6 @@
  * Sprint 1: 015 Design Tokens
  */
 
-import type { ThemeMode } from '@/types/store';
-
 // =============================================================================
 // Era Colors（15時代専用色）
 // =============================================================================
@@ -24,10 +22,25 @@ export const ERA_COLORS = {
   taisho: '#8E44AD',       // 大正
   showa: '#C0392B',        // 昭和
   heisei: '#27AE60',       // 平成
-  reiwa: '#3498DB',        // 令和
 } as const;
 
 export type EraId = keyof typeof ERA_COLORS;
+
+// ERA_COLORS を配列形式で取得（PoC コンポーネント用）
+export const ERA_COLOR_ARRAY = Object.values(ERA_COLORS);
+
+// =============================================================================
+// Category Colors（イベントカテゴリ色）
+// =============================================================================
+export const CATEGORY_COLORS = {
+  political: '#FF6B6B',   // 政治
+  cultural: '#4ECDC4',    // 文化
+  military: '#FFE66D',    // 軍事
+  economic: '#95E1D3',    // 経済
+  social: '#DDA0DD',      // 社会
+} as const;
+
+export type CategoryId = keyof typeof CATEGORY_COLORS;
 
 // =============================================================================
 // Colors Interface
@@ -147,30 +160,28 @@ export const TYPOGRAPHY = {
     relaxed: 1.75,
   },
   family: {
-    base: 'System',
+    base: 'Hiragino Sans',
     mono: 'Courier New',
   },
 } as const;
 
 // =============================================================================
-// Spacing（8px Grid）
+// Spacing（8px Grid System）
+// Base unit: 4px, Grid unit: 8px
+// 主要な値は8pxの倍数に整合
 // =============================================================================
 export const SPACING = {
   0: 0,
-  0.5: 2,
-  1: 4,
-  1.5: 6,
-  2: 8,
-  2.5: 10,
-  3: 12,
-  4: 16,
-  5: 20,
-  6: 24,
-  8: 32,
-  10: 40,
-  12: 48,
-  16: 64,
-  20: 80,
+  1: 4,    // 0.5x grid (fine adjustment)
+  2: 8,    // 1x grid
+  3: 12,   // 1.5x grid
+  4: 16,   // 2x grid
+  6: 24,   // 3x grid
+  8: 32,   // 4x grid
+  10: 40,  // 5x grid
+  12: 48,  // 6x grid
+  16: 64,  // 8x grid
+  20: 80,  // 10x grid
 } as const;
 
 // =============================================================================
@@ -211,18 +222,30 @@ export const Z_INDEX = {
 } as const;
 
 // =============================================================================
-// UI States
+// UI States（Loading / Error / Empty）
 // =============================================================================
 export const UI_STATES = {
   loading: {
     spinnerSize: 32,
+    spinnerColor: 'primary' as ColorKey,
     overlayOpacity: 0.7,
+    skeletonColor: {
+      dark: '#2D3748',
+      light: '#E2E8F0',
+    },
   },
   error: {
     iconSize: 48,
+    iconColor: 'error' as ColorKey,
+    titleSize: 'lg' as keyof typeof TYPOGRAPHY.size,
+    messageSize: 'base' as keyof typeof TYPOGRAPHY.size,
+    retryButtonVariant: 'secondary' as const,
   },
   empty: {
     iconSize: 64,
+    iconColor: 'textTertiary' as ColorKey,
+    titleSize: 'lg' as keyof typeof TYPOGRAPHY.size,
+    messageSize: 'base' as keyof typeof TYPOGRAPHY.size,
     illustrationMaxWidth: 200,
   },
 } as const;
@@ -256,19 +279,6 @@ export function getColors(theme: 'dark' | 'light') {
   return theme === 'dark' ? COLORS_DARK : COLORS_LIGHT;
 }
 
-/**
- * ThemeModeからactualテーマを解決（system対応）
- * Note: systemの場合はデバイスの設定に依存するが、
- *       現時点ではdarkをデフォルトとする
- */
-export function resolveTheme(theme: ThemeMode): 'dark' | 'light' {
-  if (theme === 'system') {
-    // TODO: Appearance.getColorScheme() で実際のシステム設定を取得
-    return 'dark';
-  }
-  return theme;
-}
-
 // =============================================================================
 // Export Types
 // =============================================================================
@@ -277,3 +287,4 @@ export type Spacing = typeof SPACING;
 export type Radius = typeof RADIUS;
 export type Duration = typeof DURATION;
 export type ZIndex = typeof Z_INDEX;
+export type UIStates = typeof UI_STATES;

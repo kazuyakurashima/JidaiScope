@@ -23,7 +23,12 @@ import type { Transforms3d } from '@shopify/react-native-skia';
 import { useState, useCallback, useEffect } from 'react';
 import * as Haptics from 'expo-haptics';
 
+import { ERA_COLOR_ARRAY, getColors } from '@/constants/tokens';
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// ダークテーマのカラーを取得（PoC はダークモード固定）
+const COLORS = getColors('dark');
 
 // ズーム制限
 const MIN_ZOOM = 1;
@@ -31,9 +36,6 @@ const MAX_ZOOM = 100;
 
 // フレームドロップ閾値 (16.67ms * 1.5 = 25ms 以上でドロップ判定)
 const FRAME_DROP_THRESHOLD_MS = 25;
-
-// 時代カラー（簡略版）
-const ERA_COLORS = ['#8B7355', '#D4A574', '#9370DB', '#4682B4', '#DC143C', '#4169E1', '#228B22'];
 
 interface PinchZoomTestProps {
   width?: number;
@@ -191,10 +193,10 @@ export function PinchZoomTest({
   // タイムラインコンテンツの幅（ズームに応じて変化）
   const contentWidth = width * 10; // 基本幅 x 10
 
-  // 時代帯の描画
+  // 時代帯の描画（ERA_COLOR_ARRAY は tokens.ts から import）
   const renderEraBands = () => {
-    const eraWidth = contentWidth / ERA_COLORS.length;
-    return ERA_COLORS.map((color, index) => (
+    const eraWidth = contentWidth / ERA_COLOR_ARRAY.length;
+    return ERA_COLOR_ARRAY.map((color, index) => (
       <Rect
         key={`era-${index}`}
         x={index * eraWidth}
@@ -223,7 +225,7 @@ export function PinchZoomTest({
           cx={x}
           cy={y}
           r={radius}
-          color="#F7FAFC"
+          color={COLORS.text}
           style="fill"
         />
       );
@@ -246,7 +248,7 @@ export function PinchZoomTest({
           y={height - 20}
           width={1}
           height={10}
-          color="#718096"
+          color={COLORS.textTertiary}
         />
       );
     }
@@ -276,7 +278,7 @@ export function PinchZoomTest({
                 y={0}
                 width={contentWidth}
                 height={height}
-                color="#0A0E14"
+                color={COLORS.bg}
               />
 
               {/* 時代帯 */}
@@ -288,7 +290,7 @@ export function PinchZoomTest({
                 y={height / 2 - 1}
                 width={contentWidth}
                 height={2}
-                color="#4FD1C5"
+                color={COLORS.primary}
               />
 
               {/* イベントマーカー */}
@@ -314,17 +316,17 @@ export function PinchZoomTest({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0E14',
+    backgroundColor: COLORS.bg,
   },
   infoBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#1A1F2E',
+    backgroundColor: COLORS.bgSecondary,
   },
   infoText: {
-    color: '#F7FAFC',
+    color: COLORS.text,
     fontSize: 14,
     fontFamily: 'monospace',
   },
@@ -335,11 +337,11 @@ const styles = StyleSheet.create({
   guideBar: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#1A1F2E',
+    backgroundColor: COLORS.bgSecondary,
     alignItems: 'center',
   },
   guideText: {
-    color: '#718096',
+    color: COLORS.textTertiary,
     fontSize: 12,
   },
 });

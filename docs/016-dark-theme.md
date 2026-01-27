@@ -26,9 +26,11 @@
 | Dark theme（デフォルト） | ✅ 完全対応 | - |
 | Light theme | ✅ 基本動作 | 正式対応・細部調整 |
 | テーマ切替 | ✅ Settings から可能 | - |
-| システム連動 | ❌ | 検討 |
+| システム連動 | ✅ オプションとして選択可能 | - |
 
 > **注:** PRD セクション 11.1 に基づき、Light theme は MVP で基本動作するが、細部の調整（コントラスト微調整、コンポーネント別最適化等）は v1.1 で正式対応予定。
+>
+> **システム連動について:** MVP ではデフォルトを Dark に固定し、初回起動時は必ずダークテーマで表示。ユーザーが Settings で明示的に「システム」を選択した場合のみ、端末設定に連動する。
 
 ---
 
@@ -343,41 +345,41 @@ export const ERA_COLORS = {
 
 ### Phase 1: Settings Store 拡張（014 対応）
 
-- [ ] theme フィールド：'dark' | 'light'
-- [ ] setTheme() 実装
-- [ ] AsyncStorage で persistence
+- [x] theme フィールド：'dark' | 'light' | 'system'
+- [x] setTheme() 実装
+- [x] AsyncStorage で persistence
 
 ### Phase 2: Color Palette 確定（015 連携）
 
-- [ ] Dark theme 15 色確定
-- [ ] Light theme 15 色確定
-- [ ] Era 専用色確定
-- [ ] constants/tokens.ts に定義
+- [x] Dark theme 15 色確定
+- [x] Light theme 15 色確定
+- [x] Era 専用色確定
+- [x] constants/tokens.ts に定義
 
 ### Phase 3: useTheme Hook（015 連携）
 
-- [ ] useTheme() hook 実装
-- [ ] theme に応じて色 palette 自動切り替え
+- [x] useTheme() hook 実装
+- [x] theme に応じて色 palette 自動切り替え
 
 ### Phase 4: 全コンポーネント 統合
 
-- [ ] Stack, Tabs screenOptions
-- [ ] Card, Button, Input
-- [ ] Text, Icon コンポーネント
-- [ ] 全画面 backgroundColor 適用
+- [x] Stack, Tabs screenOptions
+- [ ] Card, Button, Input（Sprint 2 以降）
+- [ ] Text, Icon コンポーネント（Sprint 2 以降）
+- [x] 全画面 backgroundColor 適用
 
 ### Phase 5: Settings 画面 統合（040 連携）
 
-- [ ] "テーマ" 選択肢
-- [ ] Dark ↔ Light toggle
-- [ ] 即座にリアルタイム反映
+- [x] "テーマ" 選択肢（Dark / Light / System）
+- [x] Dark ↔ Light ↔ System toggle
+- [x] 即座にリアルタイム反映
 
 ### Phase 6: テスト・検証
 
-- [ ] Dark theme で全画面ビジュアル確認
-- [ ] Light theme でも同様
-- [ ] Settings から切り替え → リアルタイム反映
-- [ ] 初回起動時 Dark theme デフォルト確認
+- [ ] Dark theme で全画面ビジュアル確認（手動検証）
+- [ ] Light theme でも同様（手動検証）
+- [x] Settings から切り替え → リアルタイム反映
+- [x] 初回起動時 Dark theme デフォルト確認
 
 ---
 
@@ -435,5 +437,5 @@ app/
 **作成日:** 2026-01-25
 **優先度:** P1
 **推定工数:** 1.5d
-**ステータス:** Not Started
+**ステータス:** Complete
 **ブロッカー:** 014 (Settings store), 015 (Design Tokens)

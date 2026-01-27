@@ -1,25 +1,54 @@
 /**
  * Root Layout - アプリ全体のナビゲーション構造
  * Sprint 1: 011 Navigation Architecture
+ * Sprint 1: 016 Dark Theme
  */
 
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useMemo } from 'react';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTheme } from '@/hooks/useTheme';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const { colors, isDark } = useTheme();
+
+  // React Navigation テーマをカスタムカラーで構築
+  const navigationTheme = useMemo(() => ({
+    dark: isDark,
+    colors: {
+      primary: colors.primary,
+      background: colors.bg,
+      card: colors.bgSecondary,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.error,
+    },
+    fonts: isDark ? DarkTheme.fonts : DefaultTheme.fonts,
+  }), [colors, isDark]);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
+    <ThemeProvider value={navigationTheme}>
+      <Stack
+        screenOptions={{
+          headerStyle: {
+            backgroundColor: colors.bgSecondary,
+          },
+          headerTintColor: colors.text,
+          headerTitleStyle: {
+            color: colors.text,
+          },
+          contentStyle: {
+            backgroundColor: colors.bg,
+          },
+        }}
+      >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="event/[id]"
@@ -40,6 +69,7 @@ export default function RootLayout() {
           options={{
             presentation: 'modal',
             title: '設定',
+            headerShown: false,
           }}
         />
         <Stack.Screen
@@ -57,7 +87,7 @@ export default function RootLayout() {
           }}
         />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
     </ThemeProvider>
   );
 }

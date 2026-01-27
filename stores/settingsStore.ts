@@ -20,7 +20,7 @@ const DEFAULT_VISIBLE_LAYERS: Record<LayerType, boolean> = {
 
 const DEFAULT_SETTINGS = {
   hapticEnabled: true,
-  theme: "system" as ThemeMode,
+  theme: "dark" as ThemeMode,
   visibleLayers: DEFAULT_VISIBLE_LAYERS,
 };
 

@@ -1,15 +1,17 @@
 /**
  * Root Layout - アプリ全体のナビゲーション構造
  * Sprint 1: 011 Navigation Architecture
+ * Sprint 1: 012 Database Schema & API
  * Sprint 1: 016 Dark Theme
  */
 
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import 'react-native-reanimated';
 
+import { initializeDatabase } from '@/data/database';
 import { useTheme } from '@/hooks/useTheme';
 
 export const unstable_settings = {
@@ -18,6 +20,13 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const { colors, isDark } = useTheme();
+
+  // データベース初期化（アプリ起動時に一度だけ実行）
+  useEffect(() => {
+    initializeDatabase().catch((error) => {
+      console.error('Database initialization failed:', error);
+    });
+  }, []);
 
   // React Navigation テーマをカスタムカラーで構築
   const navigationTheme = useMemo(() => ({

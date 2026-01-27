@@ -36,6 +36,8 @@ export interface BookmarkState {
 export interface AppState {
   proUnlocked: boolean;
   setProUnlocked: (unlocked: boolean) => void;
+  dbReady: boolean;
+  setDbReady: (ready: boolean) => void;
 }
 
 export type PurchaseStatus = "none" | "pending" | "purchased" | "restored";

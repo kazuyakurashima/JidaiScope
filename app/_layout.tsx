@@ -13,6 +13,7 @@ import 'react-native-reanimated';
 
 import { initializeDatabase } from '@/data/database';
 import { useTheme } from '@/hooks/useTheme';
+import { useAppStore } from '@/stores';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -20,13 +21,18 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const { colors, isDark } = useTheme();
+  const setDbReady = useAppStore((state) => state.setDbReady);
 
   // データベース初期化（アプリ起動時に一度だけ実行）
   useEffect(() => {
-    initializeDatabase().catch((error) => {
-      console.error('Database initialization failed:', error);
-    });
-  }, []);
+    initializeDatabase()
+      .then(() => {
+        setDbReady(true);
+      })
+      .catch((error) => {
+        console.error('Database initialization failed:', error);
+      });
+  }, [setDbReady]);
 
   // React Navigation テーマをカスタムカラーで構築
   const navigationTheme = useMemo(() => ({

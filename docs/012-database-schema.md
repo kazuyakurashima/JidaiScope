@@ -15,8 +15,8 @@
 **成功基準:**
 
 - ✅ 全テーブル作成完了
-- ✅ Repository API が動作
-- ✅ クエリ < 100ms
+- ⏳ Repository API が動作（013 完了後にユニットテストで検証）
+- ⏳ クエリ < 100ms（013 完了後に検証）
 - ✅ オフライン環境で完全動作
 
 **注意:** データ準備（実際のイベント・人物データ）は 013 で行う
@@ -41,8 +41,8 @@ So that 高速で信頼性の高い検索・表示ができる
 | 2   | Event テーブル定義完了（sourceフィールド含む）   | SQLite で確認                | -    |
 | 3   | Person テーブル定義完了                          | SQLite で確認                | -    |
 | 4   | Reign テーブル定義完了                           | SQLite で確認                | -    |
-| 5   | 全 Repository API が動作                         | ユニットテスト               | -    |
-| 6   | インデックス設定完了                             | EXPLAIN QUERY PLAN で確認    | -    |
+| 5   | 全 Repository API が動作                         | ユニットテスト（013 完了後） | -    |
+| 6   | インデックス設定完了（FTS5 は v1.1）             | EXPLAIN QUERY PLAN で確認    | -    |
 
 ---
 
@@ -61,48 +61,45 @@ So that 高速で信頼性の高い検索・表示ができる
 
 ### Phase 1: スキーマ設計
 
-- [ ] Era テーブル定義
-- [ ] Event テーブル定義（source フィールド含む）
-- [ ] Person テーブル定義
-- [ ] Reign テーブル定義
+- [x] Era テーブル定義
+- [x] Event テーブル定義（source フィールド含む）
+- [x] Person テーブル定義
+- [x] Reign テーブル定義
 
 ### Phase 2: TypeScript 型定義
 
-- [ ] types/Era.ts
-- [ ] types/Event.ts
-- [ ] types/Person.ts
-- [ ] types/Reign.ts
+- [x] types/database.ts（Era, Event, Person, Reign, Bookmark 統合）
 
 ### Phase 3: マイグレーション実装
 
-- [ ] data/database/migrations.ts
-- [ ] テーブル作成スクリプト
-- [ ] バージョニング機構
+- [x] data/database/migrations.ts
+- [x] テーブル作成スクリプト
+- [x] バージョニング機構
 
 ### Phase 4: Repository 層実装
 
-- [ ] EraRepository.ts
-  - [ ] getAllEras()
-  - [ ] getEraByYear(year)
-  - [ ] getEraById(id)
-- [ ] EventRepository.ts
-  - [ ] getEventsByYear(year)
-  - [ ] getEventsByEra(eraId)
-  - [ ] getEventById(id)
-  - [ ] searchEventsByName(keyword)
-- [ ] PersonRepository.ts
-  - [ ] getPersonById(id)
-  - [ ] searchPersonsByName(keyword)
-  - [ ] getPersonsByYear(year)
-- [ ] ReignRepository.ts
-  - [ ] getReignsByYear(year)
-  - [ ] getEmperorAtYear(year)
-  - [ ] getShogunAtYear(year)
+- [x] EraRepository.ts
+  - [x] getAllEras()
+  - [x] getEraByYear(year)
+  - [x] getEraById(id)
+- [x] EventRepository.ts
+  - [x] getEventsByYear(year)
+  - [x] getEventsByEra(eraId)
+  - [x] getEventById(id)
+  - [x] searchEventsByName(keyword)
+- [x] PersonRepository.ts
+  - [x] getPersonById(id)
+  - [x] searchPersonsByName(keyword)
+  - [x] getPersonsByYear(year)
+- [x] ReignRepository.ts
+  - [x] getReignsByYear(year)
+  - [x] getEmperorAtYear(year)
+  - [x] getShogunAtYear(year)
 
 ### Phase 5: インデックス最適化
 
 - [x] startYear, endYear インデックス
-- [ ] name, title フルテキスト検索インデックス（v1.1 で FTS5 導入予定、MVP は LIKE 検索）
+- [x] name, title インデックス（LIKE 検索用、FTS5 は v1.1 で導入予定）
 - [ ] クエリ性能計測（013 完了後に実施）
 
 ### Phase 6: テスト
@@ -207,33 +204,71 @@ export interface Event {
 
 ```typescript
 // data/repositories/EventRepository.ts
-import { openDatabaseAsync } from 'expo-sqlite';
-import type { Event } from '@/types/Event';
+import type { EventRow, HistoricalEvent } from '@/types/database';
+import { getDatabase } from '../database';
 
-const DB_NAME = 'jidaiscope.db';
-
-export async function getEventsByYear(year: number): Promise<Event[]> {
-  const db = await openDatabaseAsync(DB_NAME);
-  const result = await db.getAllAsync<Event>(
-    `SELECT * FROM event
-     WHERE substr(startDate, 1, 4) <= ?
-     AND (endDate IS NULL OR substr(endDate, 1, 4) >= ?)
-     ORDER BY startDate ASC`,
-    [String(year), String(year)]
-  );
-  return result.map(parseEventRow);
-}
-
-function parseEventRow(row: any): Event {
+function parseEventRow(row: EventRow): HistoricalEvent {
   return {
-    ...row,
+    id: row.id,
+    title: row.title,
+    startDate: row.startDate,
+    endDate: row.endDate,
+    summary: row.summary,
     tags: JSON.parse(row.tags || '[]'),
-    source: row.source ? JSON.parse(row.source) : undefined,
+    importanceLevel: row.importanceLevel,
+    eraId: row.eraId,
+    source: row.source ? JSON.parse(row.source) : null,
     relatedPersonIds: JSON.parse(row.relatedPersonIds || '[]'),
     relatedEventIds: JSON.parse(row.relatedEventIds || '[]'),
   };
 }
+
+export async function getEventsByYear(year: number): Promise<HistoricalEvent[]> {
+  const db = await getDatabase();
+  const yearStr = String(year);
+  const rows = await db.getAllAsync<EventRow>(
+    `SELECT * FROM event
+     WHERE substr(startDate, 1, 4) <= ?
+     AND (endDate IS NULL OR substr(endDate, 1, 4) >= ?)
+     ORDER BY startDate ASC`,
+    yearStr,
+    yearStr
+  );
+  return rows.map(parseEventRow);
+}
 ```
+
+---
+
+## DB 初期化の待機方法
+
+DB アクセスを行う画面では `useIsDbReady()` で初期化完了を確認してください。
+
+```tsx
+import { useEffect, useState } from 'react';
+import { useIsDbReady } from '@/stores';
+import { getEventsByYear } from '@/data/repositories';
+import type { HistoricalEvent } from '@/types/database';
+
+function MyScreen() {
+  const dbReady = useIsDbReady();
+  const [events, setEvents] = useState<HistoricalEvent[]>([]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+
+    getEventsByYear(1600).then(setEvents);
+  }, [dbReady]);
+
+  if (!dbReady) {
+    return <LoadingIndicator />;
+  }
+
+  return <EventList events={events} />;
+}
+```
+
+> **Note:** `dbReady` フラグは `_layout.tsx` で `initializeDatabase()` 完了後に `true` に設定されます。
 
 ---
 
@@ -241,20 +276,21 @@ function parseEventRow(row: any): Event {
 
 ```
 types/
-├── Era.ts
-├── Event.ts
-├── Person.ts
-└── Reign.ts
+└── database.ts           # Era, Event, Person, Reign, Bookmark 型定義
 
 data/
+├── index.ts              # エクスポート
 ├── database/
-│   ├── connection.ts      # DB接続管理
-│   └── migrations.ts      # テーブル作成
+│   ├── index.ts          # エクスポート
+│   ├── connection.ts     # DB接続管理（シングルトン）
+│   └── migrations.ts     # テーブル作成・インデックス
 └── repositories/
+    ├── index.ts          # エクスポート
     ├── EraRepository.ts
     ├── EventRepository.ts
     ├── PersonRepository.ts
-    └── ReignRepository.ts
+    ├── ReignRepository.ts
+    └── BookmarkRepository.ts
 ```
 
 ---
@@ -273,5 +309,5 @@ data/
 **作成日:** 2025-01-25
 **優先度:** P0 - Critical
 **推定工数:** 1.5d
-**ステータス:** Complete
+**ステータス:** Complete（テスト検証は 013 完了後）
 **ブロッカー:** 001 完了

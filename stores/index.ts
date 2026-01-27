@@ -12,8 +12,8 @@ export { useSearchStore } from './searchStore';
 // Bookmark Store
 export { useBookmarkStore } from './bookmarkStore';
 
-// App Store (Pro State)
-export { useAppStore, useIsPro } from './appStore';
+// App Store (Pro State, DB Ready)
+export { useAppStore, useIsPro, useIsDbReady } from './appStore';
 
 // Settings Store
 export { useSettingsStore } from './settingsStore';

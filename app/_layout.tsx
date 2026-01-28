@@ -95,6 +95,13 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="era/[id]"
+          options={{
+            title: '時代詳細',
+            headerBackTitle: '戻る',
+          }}
+        />
+        <Stack.Screen
           name="settings"
           options={{
             presentation: 'modal',

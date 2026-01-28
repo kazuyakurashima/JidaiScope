@@ -60,65 +60,65 @@ So that 時間の長さを体感しながら歴史を探索できる
 
 ### Phase 1: キャンバス基本設定
 
-- [ ] TimelineCanvas.tsx 作成
-- [ ] Skia Canvas コンテナ実装
-- [ ] 親コンポーネント（app/(tabs)/index.tsx）から呼び出し
-- [ ] 画面サイズ取得（useWindowDimensions）
+- [x] TimelineCanvas.tsx 作成
+- [x] Skia Canvas コンテナ実装
+- [x] 親コンポーネント（app/(tabs)/index.tsx）から呼び出し
+- [x] 画面サイズ取得（useWindowDimensions）
 - [ ] 縦/横レイアウト対応
 
 ### Phase 2: 座標系・スケーリング
 
-- [ ] 年号 → ピクセル変換ロジック
-  - [ ] 最小ズーム時：全体（-10000〜2025年）が画面内収まる
-  - [ ] スケール計算：totalYears × pixelsPerYear
-- [ ] 描画領域のクリッピング（可視範囲のみ）
-- [ ] スクロール位置（scrollX）の管理
+- [x] 年号 → ピクセル変換ロジック
+  - [x] 最小ズーム時：全体（-10000〜2025年）が画面内収まる
+  - [x] スケール計算：totalYears × pixelsPerYear
+- [x] 描画領域のクリッピング（可視範囲のみ）
+- [x] スクロール位置（scrollX）の管理
 
 ### Phase 3: 時代背景帯描画
 
-- [ ] 各時代（Era）の背景帯描画
-  - [ ] Era.startYear/endYear から矩形を計算
-  - [ ] Era.color で塗り分け
-  - [ ] テキスト（時代名）配置
-- [ ] 時代境界線（縦線）の描画
-- [ ] アルファ値調整（重なった場合の透視感）
+- [x] 各時代（Era）の背景帯描画
+  - [x] Era.startYear/endYear から矩形を計算
+  - [x] Era.color で塗り分け
+  - [x] テキスト（時代名）配置
+- [x] 時代境界線（縦線）の描画
+- [x] アルファ値調整（重なった場合の透視感）
 
 ### Phase 4: イベントマーカー描画
 
-- [ ] イベント点（●）の描画
-  - [ ] Event.startDate → x座標計算
-  - [ ] 重要度別サイズ分け（importanceLevel）
-  - [ ] 色分け（tag: politics/war/culture/diplomacy）
-- [ ] イベント縦線（期間イベント対応）
-  - [ ] startDate 〜 endDate の間を線で表示
+- [x] イベント点（●）の描画
+  - [x] Event.startDate → x座標計算
+  - [x] 重要度別サイズ分け（importanceLevel）
+  - [x] 色分け（tag: politics/war/culture/diplomacy）
+- [x] イベント縦線（期間イベント対応）
+  - [x] startDate 〜 endDate の間を線で表示
 - [ ] テキストラベル配置（高ズーム時のみ）
 
 ### Phase 5: インタラクション
 
-- [ ] タップ検出ロジック（ヒット領域計算）
-  - [ ] イベント : 44pt 円形のヒット領域（アクセシビリティ対応）
-  - [ ] 時代帯 : タップ時に Era 情報取得
+- [x] タップ検出ロジック（ヒット領域計算）
+  - [x] イベント : 44pt 円形のヒット領域（アクセシビリティ対応）
+  - [x] 時代帯 : タップ時に Era 情報取得
 - [ ] 長押しプレビュー機能（PRD 要件）
   - [ ] 200ms 以上長押し → イベント簡易プレビュー表示
   - [ ] ツールチップ：イベント名 + 日付
   - [ ] 指を離すと消える
-- [ ] タップ → EventDetail 画面遷移
-  - [ ] useRouter().push(`/event/${eventId}`)
-- [ ] スクロール検出（PanGestureHandler）
-  - [ ] ドラッグで水平スクロール
-  - [ ] 慣性スクロール有効化
+- [x] タップ → EventDetail 画面遷移
+  - [x] useRouter().push(`/event/${eventId}`)
+- [x] スクロール検出（PanGestureHandler）
+  - [x] ドラッグで水平スクロール
+  - [x] 慣性スクロール有効化
 
 ### Phase 6: パフォーマンス最適化
 
-- [ ] 可視範囲のみ描画（バーチャライゼーション）
-  - [ ] 画面外のマーカー・テキスト描画スキップ
+- [x] 可視範囲のみ描画（バーチャライゼーション）
+  - [x] 画面外のマーカー・テキスト描画スキップ
 - [ ] 描画キャッシュ（時代背景帯）
-- [ ] useSharedValue / useAnimatedStyle との統合
+- [x] useSharedValue / useAnimatedStyle との統合
 
 ### Phase 7: 基本ハプティクス
 
-- [ ] 時代境界通過時に Light impact 発火
-- [ ] 設定で有効/無効切り替え可能
+- [x] 時代境界通過時に Light impact 発火
+- [x] 設定で有効/無効切り替え可能
 
 ---
 
@@ -318,5 +318,5 @@ domain/
 **作成日:** 2025-01-25
 **優先度:** P0 - Critical
 **推定工数:** 3d
-**ステータス:** Not Started
-**ブロッカー:** 012, 014 完了
+**ステータス:** In Progress (Phase 1-7 基本実装完了)
+**ブロッカー:** 012, 014 完了 ✓

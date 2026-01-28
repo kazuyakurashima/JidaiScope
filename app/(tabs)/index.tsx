@@ -1,25 +1,32 @@
 /**
  * JidaiScope - Timeline Screen
- * Sprint 0: Tech Validation PoC
- * Sprint 1: Navigation Architecture
+ * Sprint 2: 020 Timeline Core
+ *
+ * メインタイムライン画面。真比率タイムラインで日本史を探索。
  */
 
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, View, Text, SafeAreaView, StatusBar, TouchableOpacity, Pressable } from 'react-native';
+import { StyleSheet, View, Text, SafeAreaView, StatusBar, Pressable, ActivityIndicator } from 'react-native';
 
-import { DenseRenderTest } from '@/components/poc/DenseRenderTest';
-import { LODTest } from '@/components/poc/LODTest';
-import { PinchZoomTest } from '@/components/poc/PinchZoomTest';
+import { TimelineCanvas } from '@/components/timeline';
 import { useTheme } from '@/hooks/useTheme';
-
-type TestMode = 'pinch' | 'lod' | 'dense';
+import { useTimelineData } from '@/hooks/useTimelineData';
+import { useAppStore } from '@/stores';
 
 export default function TimelineScreen() {
-  const [testMode, setTestMode] = useState<TestMode>('dense');
   const router = useRouter();
-  const { colors, typography, spacing, radius, isDark } = useTheme();
+  const { colors, typography, spacing, isDark } = useTheme();
+
+  // データベース状態
+  const dbReady = useAppStore((s) => s.dbReady);
+
+  // タイムラインデータ
+  const { eras, events, isLoading, error } = useTimelineData();
+
+  // ローディング・エラー表示
+  const showLoading = !dbReady || isLoading;
+  const showError = error !== null;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -60,124 +67,44 @@ export default function TimelineScreen() {
                 },
               ]}
             >
-              Sprint 0: Tech Validation
+              {showLoading ? 'Loading...' : `${eras.length} eras / ${events.length} events`}
             </Text>
           </View>
           <Pressable onPress={() => router.push('/settings')} style={{ padding: spacing[2] }}>
             <Ionicons name="settings-outline" size={spacing[6]} color={colors.textSecondary} />
           </Pressable>
         </View>
-
-        {/* テスト切替ボタン */}
-        <View style={[styles.toggleContainer, { marginTop: spacing[3], gap: spacing[2] }]}>
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              {
-                backgroundColor: testMode === 'pinch' ? colors.primary : colors.bgTertiary,
-                paddingHorizontal: spacing[3],
-                paddingVertical: spacing[1],
-                borderRadius: radius.md,
-              },
-            ]}
-            onPress={() => setTestMode('pinch')}
-          >
-            <Text
-              style={[
-                styles.toggleText,
-                {
-                  color: testMode === 'pinch' ? colors.bg : colors.textTertiary,
-                  fontSize: typography.size.sm,
-                },
-              ]}
-            >
-              Day 1: Pinch
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              {
-                backgroundColor: testMode === 'lod' ? colors.primary : colors.bgTertiary,
-                paddingHorizontal: spacing[3],
-                paddingVertical: spacing[1],
-                borderRadius: radius.md,
-              },
-            ]}
-            onPress={() => setTestMode('lod')}
-          >
-            <Text
-              style={[
-                styles.toggleText,
-                {
-                  color: testMode === 'lod' ? colors.bg : colors.textTertiary,
-                  fontSize: typography.size.sm,
-                },
-              ]}
-            >
-              Day 2: LOD
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              {
-                backgroundColor: testMode === 'dense' ? colors.primary : colors.bgTertiary,
-                paddingHorizontal: spacing[3],
-                paddingVertical: spacing[1],
-                borderRadius: radius.md,
-              },
-            ]}
-            onPress={() => setTestMode('dense')}
-          >
-            <Text
-              style={[
-                styles.toggleText,
-                {
-                  color: testMode === 'dense' ? colors.bg : colors.textTertiary,
-                  fontSize: typography.size.sm,
-                },
-              ]}
-            >
-              Day 3: Dense
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ナビゲーションテスト用ボタン */}
-        <View style={{ marginTop: spacing[3] }}>
-          <TouchableOpacity
-            style={[
-              styles.navTestButton,
-              {
-                backgroundColor: colors.accent,
-                paddingHorizontal: spacing[3],
-                paddingVertical: spacing[2],
-                borderRadius: radius.md,
-              },
-            ]}
-            onPress={() => router.push('/event/demo-event-001')}
-          >
-            <Text
-              style={[
-                styles.navTestText,
-                {
-                  color: colors.bg,
-                  fontSize: typography.size.sm,
-                },
-              ]}
-            >
-              → Event Detail (テスト)
-            </Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
-      {/* タイムライン PoC */}
+      {/* タイムライン本体 */}
       <View style={styles.timelineContainer}>
-        {testMode === 'pinch' && <PinchZoomTest />}
-        {testMode === 'lod' && <LODTest />}
-        {testMode === 'dense' && <DenseRenderTest />}
+        {showLoading && (
+          <View style={styles.centerContent}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary, marginTop: spacing[3] }]}>
+              Loading timeline data...
+            </Text>
+          </View>
+        )}
+
+        {showError && !showLoading && (
+          <View style={styles.centerContent}>
+            <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+            <Text style={[styles.errorText, { color: colors.error, marginTop: spacing[3] }]}>
+              Failed to load timeline data
+            </Text>
+            <Text style={[styles.errorDetail, { color: colors.textSecondary, marginTop: spacing[2] }]}>
+              {error?.message}
+            </Text>
+          </View>
+        )}
+
+        {!showLoading && !showError && eras.length > 0 && (
+          <TimelineCanvas
+            eras={eras}
+            events={events}
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -199,21 +126,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   subtitle: {},
-  toggleContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  toggleButton: {},
-  toggleText: {
-    fontWeight: '600',
-  },
-  navTestButton: {
-    alignSelf: 'flex-start',
-  },
-  navTestText: {
-    fontWeight: '600',
-  },
   timelineContainer: {
     flex: 1,
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+  },
+  errorText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorDetail: {
+    fontSize: 14,
+    textAlign: 'center',
+    paddingHorizontal: 24,
   },
 });

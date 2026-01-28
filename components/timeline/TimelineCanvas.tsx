@@ -1,6 +1,6 @@
 /**
  * TimelineCanvas - メインタイムライン描画コンポーネント
- * Sprint 2: 020 Timeline Core, 021 Zoom Manager
+ * Sprint 2: 020 Timeline Core, 021 Zoom Manager, 022 LOD Manager
  *
  * Skia を使用した真比率タイムラインの描画エンジン。
  * - 縄文〜令和（-14000年〜2025年）を一本のラインとして表示
@@ -8,7 +8,7 @@
  * - パン・ピンチズームジェスチャー対応
  * - ダブルタップで x2 ズーム（focal point 対応）
  * - タップでイベント詳細へ遷移
- * - LOD（Level of Detail）レベル自動切替
+ * - LOD（Level of Detail）レベルに応じた表示制御
  */
 
 import {
@@ -22,23 +22,21 @@ import {
   vec,
 } from '@shopify/react-native-skia';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedReaction,
   withDecay,
-  withTiming,
   runOnJS,
-  Easing,
 } from 'react-native-reanimated';
 
-import type { Era, HistoricalEvent, EventTag } from '@/types/database';
+import type { Era, HistoricalEvent, EventTag, Reign } from '@/types/database';
 import type { LODLevel } from '@/types/store';
 import { useTheme } from '@/hooks/useTheme';
-import { useTimelineStore, useSettingsStore } from '@/stores';
+import { useTimelineStore, useSettingsStore, useAppStore } from '@/stores';
+import { filterReigns } from '@/domain/timeline/layerFilter';
 import {
   clampScrollX,
   yearToPixel,
@@ -56,15 +54,25 @@ import {
   ERA_BAND_BOTTOM_RATIO,
   ERA_LABEL_Y_RATIO,
   EVENT_MARKER_BASE_RADIUS,
-  IMPORTANCE_SIZE_MULTIPLIER,
   TAG_COLORS,
-  MAX_VISIBLE_EVENTS,
   DOUBLE_TAP_ZOOM_FACTOR,
   LOD_THRESHOLDS,
-  ZOOM_ANIMATION_DURATION,
 } from '@/domain/timeline/constants';
 import { ERA_COLORS } from '@/constants/tokens';
+import { triggerHaptic, triggerEraBoundaryHaptic } from '@/utils/haptics';
 import { hitTest, detectEraBoundaryCrossing } from './hitDetection';
+import {
+  filterEventsByLOD,
+  getMarkerRadiusByLOD,
+  shouldShowEventLabels,
+  filterDensePeriodEvents,
+  applyEventLimit,
+} from '@/domain/timeline/lodManager';
+import {
+  REIGN_BAND_HEIGHT,
+  REIGN_BAND_OFFSET,
+  getReignColor,
+} from './drawReigns';
 
 // =============================================================================
 // Font
@@ -81,6 +89,8 @@ export interface TimelineCanvasProps {
   eras: Era[];
   /** イベントデータ */
   events: HistoricalEvent[];
+  /** 在位データ（天皇・将軍） */
+  reigns?: Reign[];
   /** イベントタップ時のコールバック */
   onEventPress?: (eventId: string) => void;
   /** 時代タップ時のコールバック */
@@ -119,11 +129,6 @@ function getEventColor(tags: EventTag[]): string {
   return TAG_COLORS[tags[0]] ?? TAG_COLORS.default;
 }
 
-function getMarkerRadius(importanceLevel: number): number {
-  const multiplier = IMPORTANCE_SIZE_MULTIPLIER[importanceLevel] ?? 1.0;
-  return EVENT_MARKER_BASE_RADIUS * multiplier;
-}
-
 /**
  * ズームレベルからLODレベルを計算
  *
@@ -150,6 +155,7 @@ function calculateLODLevel(zoom: number): LODLevel {
 export function TimelineCanvas({
   eras,
   events,
+  reigns = [],
   onEventPress,
   onEraPress,
 }: TimelineCanvasProps) {
@@ -157,13 +163,19 @@ export function TimelineCanvas({
   const router = useRouter();
   const { colors } = useTheme();
 
-  // Store
+  // Timeline Store
   const zoomLevel = useTimelineStore((s) => s.zoomLevel);
   const setZoom = useTimelineStore((s) => s.setZoom);
   const scrollX = useTimelineStore((s) => s.scrollX);
   const setScroll = useTimelineStore((s) => s.setScroll);
+  const lodLevel = useTimelineStore((s) => s.lodLevel);
   const setLOD = useTimelineStore((s) => s.setLOD);
-  const hapticEnabled = useSettingsStore((s) => s.hapticEnabled);
+
+  // Settings Store (Layer visibility)
+  const visibleLayers = useSettingsStore((s) => s.visibleLayers);
+
+  // App Store (Pro status)
+  const proUnlocked = useAppStore((s) => s.proUnlocked);
 
   // Shared values for animation
   const translateX = useSharedValue(scrollX);
@@ -201,16 +213,6 @@ export function TimelineCanvas({
   const bandHeight = bandBottom - bandTop;
   const axisY = screenHeight * TIMELINE_AXIS_Y_RATIO;
   const labelY = screenHeight * ERA_LABEL_Y_RATIO;
-
-  // ==========================================================================
-  // Haptics
-  // ==========================================================================
-
-  const triggerEraBoundaryHaptic = useCallback(() => {
-    if (hapticEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  }, [hapticEnabled]);
 
   // ==========================================================================
   // Event Handlers
@@ -364,12 +366,10 @@ export function TimelineCanvas({
       const newLOD = calculateLODLevel(newZoom);
       setLOD(newLOD);
 
-      // ハプティクスフィードバック
-      if (hapticEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
+      // ハプティクスフィードバック（fire-and-forget）
+      void triggerHaptic('medium');
     },
-    [screenWidth, setZoom, setScroll, setLOD, hapticEnabled]
+    [screenWidth, setZoom, setScroll, setLOD]
   );
 
   const doubleTapGesture = useMemo(
@@ -426,7 +426,7 @@ export function TimelineCanvas({
         })(current, previous);
       }
     },
-    [eras, screenWidth, setScroll, triggerEraBoundaryHaptic, scale]
+    [eras, screenWidth, setScroll, scale]
   );
 
   // ==========================================================================
@@ -438,15 +438,139 @@ export function TimelineCanvas({
     return eras.filter((era) => isYearRangeVisible(era.startYear, era.endYear, config));
   }, [eras, config]);
 
-  // 可視範囲内のイベントを計算（最大数制限）
+  // LODレベルに基づくイベントフィルタリング
+  const lodFilteredEvents = useMemo(() => {
+    // Layer filter: イベントレイヤーが非表示なら空配列
+    if (!visibleLayers.events) {
+      return [];
+    }
+    // Step 1: LODレベルで重要度フィルタリング
+    const byLOD = filterEventsByLOD(events, lodLevel);
+    // Step 2: 密集期間（幕末〜明治）の追加フィルタリング
+    return filterDensePeriodEvents(byLOD, lodLevel);
+  }, [events, lodLevel, visibleLayers.events]);
+
+  // 可視範囲内のイベントを計算（上限は可視範囲後に適用）
   const visibleEvents = useMemo(() => {
-    return events
-      .filter((event) => {
-        const year = extractYearFromDate(event.startDate);
-        return isYearVisible(year, config);
-      })
-      .slice(0, MAX_VISIBLE_EVENTS);
-  }, [events, config]);
+    // Step 3: 可視範囲フィルタ
+    const inView = lodFilteredEvents.filter((event) => {
+      const year = extractYearFromDate(event.startDate);
+      return isYearVisible(year, config);
+    });
+    // Step 4: 表示上限を可視範囲内のイベントに適用
+    return applyEventLimit(inView, lodLevel);
+  }, [lodFilteredEvents, config, lodLevel]);
+
+  // 在位データのフィルタリング（天皇・将軍レイヤー + Free/Pro制限）
+  const visibleReigns = useMemo(() => {
+    // 在位データがない場合は空配列
+    if (reigns.length === 0) {
+      return [];
+    }
+
+    // Layer filter + Free/Pro filter
+    const filtered = filterReigns(reigns, { visibleLayers, proUnlocked });
+
+    // 可視範囲フィルタ
+    return filtered.filter((reign) =>
+      isYearRangeVisible(reign.startYear, reign.endYear, config)
+    );
+  }, [reigns, visibleLayers, proUnlocked, config]);
+
+  // LOD設定を取得
+  const showLabels = shouldShowEventLabels(lodLevel);
+
+  // ==========================================================================
+  // LOD Transition Animation (Smooth Interpolation)
+  // ==========================================================================
+
+  const [eventOpacity, setEventOpacity] = useState(1);
+  const [eventScale, setEventScale] = useState(1);
+  const prevLodForAnimation = useRef(lodLevel);
+
+  // アニメーションキャンセル関数を保持（opacity/scale 各2本 = 最大4本）
+  const cancelFunctionsRef = useRef<(() => void)[]>([]);
+
+  // performance.now() のフォールバック付き取得
+  const getNow = useCallback(() => {
+    return globalThis.performance?.now?.() ?? Date.now();
+  }, []);
+
+  /**
+   * スムーズな補間アニメーション関数
+   * @returns cancel関数（アニメーション停止用）
+   */
+  const animateValue = useCallback((
+    from: number,
+    to: number,
+    duration: number,
+    setValue: (v: number) => void,
+    onComplete?: () => void
+  ): () => void => {
+    let rafId: number | null = null;
+    let cancelled = false;
+    const startTime = getNow();
+
+    const animate = () => {
+      if (cancelled) return;
+
+      const elapsed = getNow() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const value = from + (to - from) * eased;
+      setValue(value);
+
+      if (progress < 1) {
+        rafId = requestAnimationFrame(animate);
+      } else {
+        onComplete?.();
+      }
+    };
+
+    rafId = requestAnimationFrame(animate);
+
+    // cancel関数を返す
+    return () => {
+      cancelled = true;
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+    };
+  }, [getNow]);
+
+  // LOD変更検出 → スムーズなフェード/スケールアニメーション + ハプティクス
+  useEffect(() => {
+    if (prevLodForAnimation.current !== lodLevel) {
+      // LOD変更時のハプティクス（fire-and-forget）
+      void triggerHaptic('selection');
+
+      // 既存のアニメーションを全てキャンセル
+      cancelFunctionsRef.current.forEach((cancel) => cancel());
+      cancelFunctionsRef.current = [];
+
+      // Phase 1: フェードアウト + スケールダウン (80ms)
+      const cancelOpacity1 = animateValue(1, 0.5, 80, setEventOpacity, () => {
+        // Phase 2: フェードイン (120ms)
+        const cancelOpacity2 = animateValue(0.5, 1, 120, setEventOpacity);
+        cancelFunctionsRef.current.push(cancelOpacity2);
+      });
+
+      const cancelScale1 = animateValue(1, 0.95, 80, setEventScale, () => {
+        const cancelScale2 = animateValue(0.95, 1, 120, setEventScale);
+        cancelFunctionsRef.current.push(cancelScale2);
+      });
+
+      cancelFunctionsRef.current.push(cancelOpacity1, cancelScale1);
+      prevLodForAnimation.current = lodLevel;
+    }
+
+    return () => {
+      // アンマウント時に全アニメーションをキャンセル
+      cancelFunctionsRef.current.forEach((cancel) => cancel());
+      cancelFunctionsRef.current = [];
+    };
+  }, [lodLevel, animateValue]);
 
   // ==========================================================================
   // Render
@@ -522,12 +646,62 @@ export function TimelineCanvas({
               opacity={0.3}
             />
 
-            {/* イベントマーカー */}
-            <Group>
+            {/* 在位期間帯（天皇・将軍） - 024 Layer Management */}
+            {visibleReigns.length > 0 && (
+              <Group>
+                {visibleReigns.map((reign) => {
+                  const startX = yearToPixel(reign.startYear, config);
+                  const endX = yearToPixel(reign.endYear, config);
+                  const width = Math.max(2, endX - startX);
+                  const color = getReignColor(reign.officeType);
+
+                  // 天皇は軸の上、将軍は軸の下
+                  const isEmperorReign = reign.officeType === 'emperor';
+                  const bandY = isEmperorReign
+                    ? axisY - REIGN_BAND_OFFSET - REIGN_BAND_HEIGHT
+                    : axisY + REIGN_BAND_OFFSET;
+
+                  return (
+                    <Group key={`reign-${reign.id}`}>
+                      <Rect
+                        x={startX}
+                        y={bandY}
+                        width={width}
+                        height={REIGN_BAND_HEIGHT}
+                        color={color}
+                        opacity={0.7}
+                      />
+                      {/* 高ズーム時に代数ラベル表示 */}
+                      {font && zoomLevel >= 20 && width > 30 && reign.ordinal && (
+                        <Text
+                          x={startX + (width - font.measureText(`${reign.ordinal}`).width) / 2}
+                          y={bandY + REIGN_BAND_HEIGHT / 2 + 4}
+                          text={`${reign.ordinal}`}
+                          font={font}
+                          color={colors.text}
+                        />
+                      )}
+                    </Group>
+                  );
+                })}
+              </Group>
+            )}
+
+            {/* イベントマーカー（LOD切替時フェード/スケール対応） */}
+            <Group
+              opacity={eventOpacity}
+              transform={[{ scale: eventScale }]}
+              origin={vec(screenWidth / 2, axisY)}
+            >
               {visibleEvents.map((event) => {
                 const year = extractYearFromDate(event.startDate);
                 const x = yearToPixel(year, config);
-                const radius = getMarkerRadius(event.importanceLevel);
+                // LODレベルに基づいたマーカー半径
+                const radius = getMarkerRadiusByLOD(
+                  EVENT_MARKER_BASE_RADIUS,
+                  event.importanceLevel,
+                  lodLevel
+                );
                 const color = getEventColor(event.tags);
 
                 return (
@@ -541,6 +715,16 @@ export function TimelineCanvas({
                         color={color}
                         strokeWidth={2}
                         opacity={0.6}
+                      />
+                    )}
+                    {/* L3: イベントラベル表示 */}
+                    {showLabels && font && (
+                      <Text
+                        x={x - font.measureText(event.title).width / 2}
+                        y={axisY - radius - 8}
+                        text={event.title}
+                        font={font}
+                        color={colors.text}
                       />
                     )}
                   </Group>

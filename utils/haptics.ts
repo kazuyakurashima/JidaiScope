@@ -1,19 +1,23 @@
 /**
- * haptics.ts - Sprint 0 Day 2 PoC
+ * haptics.ts - ハプティクスフィードバック
+ * Sprint 2: 025 Haptics Feedback
  *
- * 検証項目:
- * - ハプティクス応答時間 < 50ms
- * - Light/Medium/Heavy impact の使い分け
- * - LOD 切替時の触覚フィードバック
+ * 発火タイミング:
+ * - 時代境界通過: Light impact
+ * - LOD レベル変更: Selection（シンプルな触感）
+ * - Era Picker タップ: Selection
+ * - ダブルタップズーム: Medium impact
+ *
+ * 設定: settingsStore.hapticEnabled で ON/OFF 制御
  */
 
 import * as Haptics from 'expo-haptics';
 
+import { useSettingsStore } from '@/stores/settingsStore';
+import type { LODLevel } from '@/types/store';
+
 // ハプティクスの種類
 export type HapticType = 'light' | 'medium' | 'heavy' | 'selection' | 'success' | 'warning' | 'error';
-
-// LOD レベル定義
-export type LODLevel = 0 | 1 | 2 | 3;
 
 // 計測結果の型
 export interface HapticMeasurement {
@@ -30,13 +34,19 @@ const measurements: HapticMeasurement[] = [];
 /**
  * ハプティクス発火（計測付き）
  * @param type ハプティクスの種類
- * @returns 発火にかかった時間（ms）、失敗時は -1
+ * @returns 発火にかかった時間（ms）、失敗時は -1、無効時は 0
  *
  * Note: シミュレータや非対応端末では失敗する可能性があるため、
  * try/catch で例外を吸収し、LOD 更新をブロックしない
  */
 export async function triggerHaptic(type: HapticType): Promise<number> {
-  const startTime = performance.now();
+  // Check if haptics is enabled in settings
+  const { hapticEnabled } = useSettingsStore.getState();
+  if (!hapticEnabled) {
+    return 0;
+  }
+
+  const startTime = globalThis.performance?.now?.() ?? Date.now();
   let success = true;
 
   try {
@@ -68,7 +78,7 @@ export async function triggerHaptic(type: HapticType): Promise<number> {
     success = false;
   }
 
-  const endTime = performance.now();
+  const endTime = globalThis.performance?.now?.() ?? Date.now();
   const duration = success ? endTime - startTime : -1;
 
   // 計測結果を保存
@@ -85,43 +95,26 @@ export async function triggerHaptic(type: HapticType): Promise<number> {
 
 /**
  * LOD 切替時のハプティクス
- * - L0 → L1: Light（ズームイン開始）
- * - L1 → L2: Medium（詳細表示開始）
- * - L2 → L3: Heavy（最大詳細）
- * - 逆方向: Selection（軽い触感）
+ * PRD仕様: LODレベル変更時は Selection feedback（デフォルトON）
  */
 export async function triggerLODHaptic(
   fromLevel: LODLevel,
   toLevel: LODLevel
 ): Promise<number> {
-  // ズームイン（詳細化）
-  if (toLevel > fromLevel) {
-    const diff = toLevel - fromLevel;
-    if (diff >= 2) {
-      // 2段階以上のジャンプ
-      return triggerHaptic('heavy');
-    } else if (toLevel === 3) {
-      // L3 到達
-      return triggerHaptic('medium');
-    } else {
-      return triggerHaptic('light');
-    }
+  // 変化なしの場合はスキップ
+  if (fromLevel === toLevel) {
+    return 0;
   }
 
-  // ズームアウト（広域化）
-  if (toLevel < fromLevel) {
-    return triggerHaptic('selection');
-  }
-
-  // 変化なし
-  return 0;
+  // LOD変更は常に Selection feedback
+  return triggerHaptic('selection');
 }
 
 /**
- * 時代境界通過時のハプティクス
+ * 時代境界通過時のハプティクス（Light impact）
  */
 export async function triggerEraBoundaryHaptic(): Promise<number> {
-  return triggerHaptic('medium');
+  return triggerHaptic('light');
 }
 
 /**

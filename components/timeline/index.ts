@@ -6,7 +6,10 @@
 export { TimelineCanvas } from './TimelineCanvas';
 export type { TimelineCanvasProps } from './TimelineCanvas';
 
+export { EraPickerBar } from './EraPickerBar';
+
 // Drawing utilities (for advanced use cases)
 export { drawEras, getEraColor } from './drawEras';
 export { drawEvents, drawEventMarkers, drawTimelineAxis, getEventColor, getMarkerRadius } from './drawEvents';
+export { drawReigns, getReignColor, EMPEROR_COLOR, SHOGUN_COLOR } from './drawReigns';
 export { hitTest, getEventAtPoint, getEraAtPoint, detectEraBoundaryCrossing } from './hitDetection';

@@ -36,7 +36,8 @@ import {
 } from 'react-native-reanimated';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Transforms3d } from '@shopify/react-native-skia';
-import { triggerLODHaptic, type LODLevel } from '../../utils/haptics';
+import { triggerLODHaptic } from '../../utils/haptics';
+import type { LODLevel } from '@/types/store';
 
 import { ERA_COLOR_ARRAY } from '@/constants/tokens';
 import { useTheme } from '@/hooks/useTheme';

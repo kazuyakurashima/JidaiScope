@@ -58,36 +58,47 @@ So that 情報をシンプルに整理して学習できる
 
 ### Phase 1: レイヤー定義
 
-- [ ] Layer type 定義
+- [x] Layer type 定義（既存: types/store.ts）
   ```typescript
   type LayerType = "era" | "events" | "emperor" | "shogun" | "person";
   ```
-- [ ] 各レイヤーのメタデータ（色、表示ルール）
+- [x] 各レイヤーのメタデータ（色、表示ルール）
+  - drawReigns.ts: EMPEROR_COLOR (#D4AF37), SHOGUN_COLOR (#20B2AA), REGENT_COLOR (#9370DB)
 
 ### Phase 2: 表示制限ロジック
 
-- [ ] Free 制限
-  - [ ] 天皇：最初の 10 代のみ
-  - [ ] 将軍：鎌倉/室町/江戸から各 2 代ずつ？
-  - [ ] 人物：20 人ランダム選抜？
-- [ ] Pro 解放ロジック
-  - [ ] appStore.proUnlocked チェック → フルレイヤー表示
-  - [ ] **注意:** Sprint 1 では stub (false)、Sprint 4 で IAP 連携後に動的切替
+- [x] Free 制限（domain/timeline/layerFilter.ts）
+  - [x] 天皇：最初の 10 代のみ（FREE_EMPEROR_LIMIT = 10）
+  - [x] 将軍：最初の 5 代のみ（FREE_SHOGUN_LIMIT = 5）
+  - [x] 人物：重要度順 20 人（FREE_PERSON_LIMIT = 20）
+- [x] Pro 解放ロジック
+  - [x] appStore.proUnlocked チェック → フルレイヤー表示
+  - [x] **注意:** Sprint 1 では stub (false)、Sprint 4 で IAP 連携後に動的切替
 
 ### Phase 3: settingsStore 統合
 
-- [ ] visibleLayers: Record<LayerType, boolean>
-- [ ] toggleLayer(type: LayerType): void
+- [x] visibleLayers: Record<LayerType, boolean>（既存）
+- [x] toggleLayer(type: LayerType): void（既存）
 
 ### Phase 4: TimelineCanvas 描画 調整
 
-- [ ] drawReigns 関数に visibleLayers チェック追加
-- [ ] visibleLayers[type] = false → 描画スキップ
+- [x] drawReigns.ts 作成（天皇・将軍の在位帯描画）
+- [x] TimelineCanvas に visibleLayers/proUnlocked 統合
+  - events レイヤー: visibleLayers.events チェック
+  - reigns 描画: filterReigns() で emperor/shogun フィルタ + Free/Pro 制限
+- [x] visibleLayers[type] = false → 描画スキップ
 
 ### Phase 5: Settings UI（チケット 040 と連携）
 
-- [ ] Layer Toggle スイッチ作成
-- [ ] Pro 限定レイヤーに ProBadge 表示
+- [ ] Layer Toggle スイッチ作成（040 で実装予定）
+- [ ] Pro 限定レイヤーに ProBadge 表示（040 で実装予定）
+
+### Phase 6: テスト
+
+- [x] TypeScript ビルド確認
+- [x] ESLint チェック
+- [ ] 実機テスト：レイヤー表示切替確認
+- [ ] Free/Pro 制限確認
 
 ---
 
@@ -152,30 +163,40 @@ function useFilteredReigns(reigns: Reign[]) {
 
 ```
 types/
-└── layer.ts                    # Layer型定義
+└── store.ts                    # LayerType 型定義
+
+domain/
+└── timeline/
+    └── layerFilter.ts          # Free/Pro フィルタリングロジック
 
 components/
 └── timeline/
-    ├── drawReigns.ts          # レイヤー描画（visibleLayers チェック）
-    └── LayerToggle.tsx        # UI コンポーネント
+    ├── drawReigns.ts           # 在位帯描画ユーティリティ
+    ├── TimelineCanvas.tsx      # visibleLayers/proUnlocked 統合
+    └── LayerToggle.tsx         # UI コンポーネント（040 で実装予定）
 
 stores/
-└── settingsStore.ts           # visibleLayers 管理
+└── settingsStore.ts            # visibleLayers 管理
 ```
 
 ---
 
 ## テスト項目
 
-- [ ] Free ユーザー：天皇 10代のみ表示
-- [ ] Pro ユーザー：全天皇表示
-- [ ] レイヤー OFF → 即座に画面から消える
-- [ ] パフォーマンス：非表示レイヤーの描画なし
+| テスト項目               | 手順                           | 期待値                    | 状態 |
+| ------------------------ | ------------------------------ | ------------------------- | ---- |
+| TypeScript               | npx tsc --noEmit               | エラーなし                | ✅   |
+| ESLint                   | npm run lint                   | エラーなし                | ✅   |
+| Free: 天皇制限           | Free状態で天皇レイヤー表示     | 10代のみ表示              | -    |
+| Pro: 天皇全表示          | Pro状態で天皇レイヤー表示      | 全代表示                  | -    |
+| レイヤーOFF              | settingsでevent OFF            | イベントマーカー消失      | -    |
+| 描画パフォーマンス       | レイヤーOFF時の描画処理        | 描画処理スキップ確認      | -    |
+| 在位帯表示               | 天皇・将軍レイヤーON           | 軸上下に帯表示            | -    |
 
 ---
 
 **作成日:** 2025-01-25
 **優先度:** P0
 **推定工数:** 2d
-**ステータス:** Not Started
-**ブロッカー:** 020, 014 完了（041 IAP 依存なし）
+**ステータス:** Done (Phase 1-4 実装完了、Phase 5 は 040 で実装予定)
+**ブロッカー:** 020, 014 完了 ✓

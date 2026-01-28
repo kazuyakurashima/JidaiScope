@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StyleSheet, View, Text, SafeAreaView, StatusBar, Pressable, ActivityIndicator } from 'react-native';
 
-import { TimelineCanvas } from '@/components/timeline';
+import { TimelineCanvas, EraPickerBar } from '@/components/timeline';
 import { useTheme } from '@/hooks/useTheme';
 import { useTimelineData } from '@/hooks/useTimelineData';
 import { useAppStore } from '@/stores';
@@ -75,6 +75,11 @@ export default function TimelineScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* Era Picker Bar */}
+      {!showLoading && !showError && eras.length > 0 && (
+        <EraPickerBar eras={eras} />
+      )}
 
       {/* タイムライン本体 */}
       <View style={styles.timelineContainer}>

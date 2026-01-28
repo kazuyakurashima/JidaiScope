@@ -126,12 +126,21 @@ function getMarkerRadius(importanceLevel: number): number {
 
 /**
  * ズームレベルからLODレベルを計算
+ *
+ * 境界条件:
+ * - L0 (全体俯瞰): 1 ≤ zoom < 2
+ * - L1 (時代概要): 2 ≤ zoom < 10
+ * - L2 (詳細表示): 10 ≤ zoom < 50
+ * - L3 (最大詳細): 50 ≤ zoom
+ *
+ * 境界値（2, 10, 50）は上位LODに含まれる
  */
 function calculateLODLevel(zoom: number): LODLevel {
-  if (zoom < LOD_THRESHOLDS.L0_MAX) return 0;
-  if (zoom < LOD_THRESHOLDS.L1_MAX) return 1;
-  if (zoom < LOD_THRESHOLDS.L2_MAX) return 2;
-  return 3;
+  // 境界値は上位レベルに含める（zoom >= 2 → L1）
+  if (zoom < LOD_THRESHOLDS.L0_MAX) return 0;  // 1 ≤ zoom < 2
+  if (zoom < LOD_THRESHOLDS.L1_MAX) return 1;  // 2 ≤ zoom < 10
+  if (zoom < LOD_THRESHOLDS.L2_MAX) return 2;  // 10 ≤ zoom < 50
+  return 3;                                     // 50 ≤ zoom
 }
 
 // =============================================================================
@@ -281,12 +290,18 @@ export function TimelineCanvas({
     [screenWidth, translateX, scale, scrollX]
   );
 
-  // ピンチズーム終了時のLOD更新
-  const handlePinchEnd = useCallback(
-    (finalZoom: number) => {
-      setZoom(finalZoom);
-      const newLOD = calculateLODLevel(finalZoom);
-      setLOD(newLOD);
+  // ピンチズーム中のズーム＆LOD更新（リアルタイム）
+  const prevLODRef = useRef<LODLevel>(calculateLODLevel(zoomLevel));
+
+  const handlePinchUpdate = useCallback(
+    (newZoom: number) => {
+      setZoom(newZoom);
+      // LODレベルが変わった場合のみ更新（パフォーマンス最適化）
+      const newLOD = calculateLODLevel(newZoom);
+      if (newLOD !== prevLODRef.current) {
+        prevLODRef.current = newLOD;
+        setLOD(newLOD);
+      }
     },
     [setZoom, setLOD]
   );
@@ -307,15 +322,15 @@ export function TimelineCanvas({
             Math.min(MAX_ZOOM_LEVEL, pinchStartZoom.value * e.scale)
           );
           scale.value = newZoom;
-          // リアルタイムでストアを更新して描画に反映
-          runOnJS(setZoom)(newZoom);
+          // リアルタイムでストアとLODを更新
+          runOnJS(handlePinchUpdate)(newZoom);
         })
         .onEnd(() => {
           'worklet';
-          // 最終値をストアに確定 + LOD更新
-          runOnJS(handlePinchEnd)(scale.value);
+          // 最終値を確定（handlePinchUpdate で既に更新済み）
+          runOnJS(handlePinchUpdate)(scale.value);
         }),
-    [setZoom, scale, pinchStartZoom, handlePinchEnd]
+    [scale, pinchStartZoom, handlePinchUpdate]
   );
 
   const tapGesture = useMemo(
@@ -368,13 +383,19 @@ export function TimelineCanvas({
     [handleDoubleTapZoom, scale, translateX]
   );
 
+  // Gesture.Exclusive: ダブルタップが失敗（タイムアウト）してから単タップを発火
+  // これによりダブルタップが確実に検出される
+  const tapGestures = useMemo(
+    () => Gesture.Exclusive(doubleTapGesture, tapGesture),
+    [doubleTapGesture, tapGesture]
+  );
+
   const composedGesture = useMemo(
     () => Gesture.Race(
-      doubleTapGesture,
-      tapGesture,
+      tapGestures,
       Gesture.Simultaneous(panGesture, pinchGesture)
     ),
-    [doubleTapGesture, tapGesture, panGesture, pinchGesture]
+    [tapGestures, panGesture, pinchGesture]
   );
 
   // ==========================================================================

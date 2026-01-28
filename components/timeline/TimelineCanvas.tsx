@@ -1,12 +1,14 @@
 /**
  * TimelineCanvas - メインタイムライン描画コンポーネント
- * Sprint 2: 020 Timeline Core
+ * Sprint 2: 020 Timeline Core, 021 Zoom Manager
  *
  * Skia を使用した真比率タイムラインの描画エンジン。
  * - 縄文〜令和（-14000年〜2025年）を一本のラインとして表示
  * - 時代背景帯とイベントマーカーの描画
  * - パン・ピンチズームジェスチャー対応
+ * - ダブルタップで x2 ズーム（focal point 対応）
  * - タップでイベント詳細へ遷移
+ * - LOD（Level of Detail）レベル自動切替
  */
 
 import {
@@ -28,10 +30,13 @@ import Animated, {
   useSharedValue,
   useAnimatedReaction,
   withDecay,
+  withTiming,
   runOnJS,
+  Easing,
 } from 'react-native-reanimated';
 
 import type { Era, HistoricalEvent, EventTag } from '@/types/database';
+import type { LODLevel } from '@/types/store';
 import { useTheme } from '@/hooks/useTheme';
 import { useTimelineStore, useSettingsStore } from '@/stores';
 import {
@@ -54,6 +59,9 @@ import {
   IMPORTANCE_SIZE_MULTIPLIER,
   TAG_COLORS,
   MAX_VISIBLE_EVENTS,
+  DOUBLE_TAP_ZOOM_FACTOR,
+  LOD_THRESHOLDS,
+  ZOOM_ANIMATION_DURATION,
 } from '@/domain/timeline/constants';
 import { ERA_COLORS } from '@/constants/tokens';
 import { hitTest, detectEraBoundaryCrossing } from './hitDetection';
@@ -116,6 +124,16 @@ function getMarkerRadius(importanceLevel: number): number {
   return EVENT_MARKER_BASE_RADIUS * multiplier;
 }
 
+/**
+ * ズームレベルからLODレベルを計算
+ */
+function calculateLODLevel(zoom: number): LODLevel {
+  if (zoom < LOD_THRESHOLDS.L0_MAX) return 0;
+  if (zoom < LOD_THRESHOLDS.L1_MAX) return 1;
+  if (zoom < LOD_THRESHOLDS.L2_MAX) return 2;
+  return 3;
+}
+
 // =============================================================================
 // Component
 // =============================================================================
@@ -135,6 +153,7 @@ export function TimelineCanvas({
   const setZoom = useTimelineStore((s) => s.setZoom);
   const scrollX = useTimelineStore((s) => s.scrollX);
   const setScroll = useTimelineStore((s) => s.setScroll);
+  const setLOD = useTimelineStore((s) => s.setLOD);
   const hapticEnabled = useSettingsStore((s) => s.hapticEnabled);
 
   // Shared values for animation
@@ -262,6 +281,16 @@ export function TimelineCanvas({
     [screenWidth, translateX, scale, scrollX]
   );
 
+  // ピンチズーム終了時のLOD更新
+  const handlePinchEnd = useCallback(
+    (finalZoom: number) => {
+      setZoom(finalZoom);
+      const newLOD = calculateLODLevel(finalZoom);
+      setLOD(newLOD);
+    },
+    [setZoom, setLOD]
+  );
+
   const pinchGesture = useMemo(
     () =>
       Gesture.Pinch()
@@ -283,10 +312,10 @@ export function TimelineCanvas({
         })
         .onEnd(() => {
           'worklet';
-          // 最終値をストアに確定
-          runOnJS(setZoom)(scale.value);
+          // 最終値をストアに確定 + LOD更新
+          runOnJS(handlePinchEnd)(scale.value);
         }),
-    [setZoom, scale, pinchStartZoom]
+    [setZoom, scale, pinchStartZoom, handlePinchEnd]
   );
 
   const tapGesture = useMemo(
@@ -298,9 +327,54 @@ export function TimelineCanvas({
     [handleTap, scale, translateX]
   );
 
+  // ダブルタップズーム（x2）
+  const handleDoubleTapZoom = useCallback(
+    (tapX: number, currentZoom: number, currentScrollX: number) => {
+      // 新しいズームレベル計算（最大値で制限、または最小に戻す）
+      const newZoom = currentZoom >= MAX_ZOOM_LEVEL
+        ? MIN_ZOOM_LEVEL
+        : Math.min(MAX_ZOOM_LEVEL, currentZoom * DOUBLE_TAP_ZOOM_FACTOR);
+
+      // タップ位置を基準にスクロール調整（focal point zoom）
+      // タップした位置が同じ年を指すようにスクロールを調整
+      const zoomRatio = newZoom / currentZoom;
+      const newScrollX = (currentScrollX - tapX) * zoomRatio + tapX;
+      const clampedScrollX = clampScrollX(newScrollX, screenWidth, newZoom);
+
+      // 状態更新
+      setZoom(newZoom);
+      setScroll(clampedScrollX);
+
+      // LOD更新
+      const newLOD = calculateLODLevel(newZoom);
+      setLOD(newLOD);
+
+      // ハプティクスフィードバック
+      if (hapticEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+    },
+    [screenWidth, setZoom, setScroll, setLOD, hapticEnabled]
+  );
+
+  const doubleTapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .numberOfTaps(2)
+        .onEnd((e) => {
+          'worklet';
+          runOnJS(handleDoubleTapZoom)(e.x, scale.value, translateX.value);
+        }),
+    [handleDoubleTapZoom, scale, translateX]
+  );
+
   const composedGesture = useMemo(
-    () => Gesture.Race(tapGesture, Gesture.Simultaneous(panGesture, pinchGesture)),
-    [tapGesture, panGesture, pinchGesture]
+    () => Gesture.Race(
+      doubleTapGesture,
+      tapGesture,
+      Gesture.Simultaneous(panGesture, pinchGesture)
+    ),
+    [doubleTapGesture, tapGesture, panGesture, pinchGesture]
   );
 
   // ==========================================================================

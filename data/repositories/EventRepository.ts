@@ -201,3 +201,100 @@ export async function getRelatedEvents(eventId: string): Promise<HistoricalEvent
   );
   return rows.map(parseEventRow);
 }
+
+// JSON1 利用可否キャッシュ（undefined=未チェック, true/false=結果）
+let json1Available: boolean | undefined;
+
+/**
+ * JSON1 拡張が利用可能かチェック
+ */
+async function checkJson1Available(): Promise<boolean> {
+  if (json1Available !== undefined) return json1Available;
+
+  try {
+    const db = await getDatabase();
+    await db.getFirstAsync(`SELECT json_each('["test"]')`);
+    json1Available = true;
+  } catch {
+    json1Available = false;
+  }
+  return json1Available;
+}
+
+/**
+ * 人物IDに関連するイベントを取得
+ * relatedPersonIds JSON配列に人物IDが含まれるイベントを検索
+ * JSON1 json_each を使用して厳密一致（person-1 が person-10 にマッチしない）
+ * JSON1 が利用できない場合は LIKE フォールバック
+ */
+export async function getEventsByPersonId(personId: string): Promise<HistoricalEvent[]> {
+  const db = await getDatabase();
+  const useJson1 = await checkJson1Available();
+
+  if (useJson1) {
+    const rows = await db.getAllAsync<EventRow>(
+      `SELECT e.* FROM event e
+       WHERE EXISTS (
+         SELECT 1 FROM json_each(e.relatedPersonIds) j
+         WHERE j.value = ?
+       )
+       ORDER BY e.importanceLevel DESC, e.startDate ASC
+       LIMIT 50`,
+      personId
+    );
+    return rows.map(parseEventRow);
+  }
+
+  // LIKE フォールバック（JSON境界を考慮: "id", または "id"]）
+  const rows = await db.getAllAsync<EventRow>(
+    `SELECT * FROM event
+     WHERE (relatedPersonIds LIKE ? OR relatedPersonIds LIKE ?)
+     ORDER BY importanceLevel DESC, startDate ASC
+     LIMIT 50`,
+    `%"${personId}",%`,
+    `%"${personId}"]%`
+  );
+  return rows.map(parseEventRow);
+}
+
+/**
+ * 複数の人物IDに関連するイベントを一括取得
+ * JSON1 json_each を使用して厳密一致
+ * JSON1 が利用できない場合は LIKE フォールバック
+ */
+export async function getEventsByPersonIds(personIds: string[]): Promise<HistoricalEvent[]> {
+  if (personIds.length === 0) return [];
+
+  const db = await getDatabase();
+  const useJson1 = await checkJson1Available();
+
+  if (useJson1) {
+    const placeholders = personIds.map(() => '?').join(',');
+    const rows = await db.getAllAsync<EventRow>(
+      `SELECT DISTINCT e.* FROM event e
+       WHERE EXISTS (
+         SELECT 1 FROM json_each(e.relatedPersonIds) j
+         WHERE j.value IN (${placeholders})
+       )
+       ORDER BY e.importanceLevel DESC, e.startDate ASC
+       LIMIT 100`,
+      ...personIds
+    );
+    return rows.map(parseEventRow);
+  }
+
+  // LIKE フォールバック
+  const conditions = personIds
+    .map(() => `(relatedPersonIds LIKE ? OR relatedPersonIds LIKE ?)`)
+    .join(' OR ');
+  const params = personIds.flatMap((id) => [`%"${id}",%`, `%"${id}"]%`]);
+
+  const rows = await db.getAllAsync<EventRow>(
+    `SELECT DISTINCT * FROM event
+     WHERE ${conditions}
+     ORDER BY importanceLevel DESC, startDate ASC
+     LIMIT 100`,
+    ...params
+  );
+  return rows.map(parseEventRow);
+}

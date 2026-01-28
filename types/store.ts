@@ -13,14 +13,30 @@ export interface TimelineState {
   reset: () => void;
 }
 
+export interface CachedSearchResult {
+  items: Array<{
+    id: string;
+    type: 'event' | 'person' | 'year';
+    title: string;
+    subtitle: string;
+    year: number;
+  }>;
+  totalCount: number;
+  suggestions: string[];
+  timestamp: number;
+}
+
 export interface SearchState {
   searchHistory: string[];
-  searchResults: Record<string, string[]>;
+  searchResults: Record<string, CachedSearchResult>;
   currentKeyword: string;
 
   search: (keyword: string) => void;
   clearHistory: () => void;
-  cacheResults: (keyword: string, results: string[]) => void;
+  cacheResults: (keyword: string, result: CachedSearchResult) => void;
+  getCachedResult: (keyword: string) => CachedSearchResult | null;
+  /** キャッシュヒット時に履歴順を更新（直近順を維持） */
+  touchHistory: (keyword: string) => void;
 }
 
 export interface BookmarkState {

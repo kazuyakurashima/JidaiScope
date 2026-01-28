@@ -14,6 +14,7 @@
 import type { HistoricalEvent } from '@/types/database';
 import type { LODLevel } from '@/types/store';
 import { extractYearFromDate } from './coordinateSystem';
+import { LOD_THRESHOLDS } from './constants';
 
 // =============================================================================
 // LOD Configuration
@@ -82,6 +83,28 @@ export const LOD_CONFIGS: Record<LODLevel, LODConfig> = {
     maxVisibleEvents: 500,
   },
 };
+
+// =============================================================================
+// LOD Level Calculation
+// =============================================================================
+
+/**
+ * ズームレベルからLODレベルを計算
+ *
+ * 境界条件:
+ * - L0 (全体俯瞰): 1 ≤ zoom < 2
+ * - L1 (時代概要): 2 ≤ zoom < 10
+ * - L2 (詳細表示): 10 ≤ zoom < 50
+ * - L3 (最大詳細): 50 ≤ zoom
+ *
+ * 境界値（2, 10, 50）は上位LODに含まれる
+ */
+export function calculateLODLevel(zoom: number): LODLevel {
+  if (zoom < LOD_THRESHOLDS.L0_MAX) return 0;  // 1 ≤ zoom < 2
+  if (zoom < LOD_THRESHOLDS.L1_MAX) return 1;  // 2 ≤ zoom < 10
+  if (zoom < LOD_THRESHOLDS.L2_MAX) return 2;  // 10 ≤ zoom < 50
+  return 3;                                     // 50 ≤ zoom
+}
 
 // =============================================================================
 // Filtering Functions

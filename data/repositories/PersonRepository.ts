@@ -172,3 +172,20 @@ export async function getPersonCount(): Promise<number> {
   );
   return result?.count ?? 0;
 }
+
+/**
+ * 複数のIDで人物を一括取得
+ */
+export async function getPersonsByIds(ids: string[]): Promise<Person[]> {
+  if (ids.length === 0) return [];
+
+  const db = await getDatabase();
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = await db.getAllAsync<PersonRow>(
+    `SELECT * FROM person
+     WHERE id IN (${placeholders})
+     ORDER BY importanceLevel DESC, name ASC`,
+    ...ids
+  );
+  return rows.map(parsePersonRow);
+}

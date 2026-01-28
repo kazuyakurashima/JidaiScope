@@ -56,7 +56,6 @@ import {
   EVENT_MARKER_BASE_RADIUS,
   TAG_COLORS,
   DOUBLE_TAP_ZOOM_FACTOR,
-  LOD_THRESHOLDS,
 } from '@/domain/timeline/constants';
 import { ERA_COLORS } from '@/constants/tokens';
 import { triggerHaptic, triggerEraBoundaryHaptic } from '@/utils/haptics';
@@ -67,6 +66,7 @@ import {
   shouldShowEventLabels,
   filterDensePeriodEvents,
   applyEventLimit,
+  calculateLODLevel,
 } from '@/domain/timeline/lodManager';
 import {
   REIGN_BAND_HEIGHT,
@@ -127,25 +127,6 @@ function getEraColor(eraId: string, dbColor: string | null): string {
 function getEventColor(tags: EventTag[]): string {
   if (tags.length === 0) return TAG_COLORS.default;
   return TAG_COLORS[tags[0]] ?? TAG_COLORS.default;
-}
-
-/**
- * ズームレベルからLODレベルを計算
- *
- * 境界条件:
- * - L0 (全体俯瞰): 1 ≤ zoom < 2
- * - L1 (時代概要): 2 ≤ zoom < 10
- * - L2 (詳細表示): 10 ≤ zoom < 50
- * - L3 (最大詳細): 50 ≤ zoom
- *
- * 境界値（2, 10, 50）は上位LODに含まれる
- */
-function calculateLODLevel(zoom: number): LODLevel {
-  // 境界値は上位レベルに含める（zoom >= 2 → L1）
-  if (zoom < LOD_THRESHOLDS.L0_MAX) return 0;  // 1 ≤ zoom < 2
-  if (zoom < LOD_THRESHOLDS.L1_MAX) return 1;  // 2 ≤ zoom < 10
-  if (zoom < LOD_THRESHOLDS.L2_MAX) return 2;  // 10 ≤ zoom < 50
-  return 3;                                     // 50 ≤ zoom
 }
 
 // =============================================================================

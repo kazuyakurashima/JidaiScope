@@ -1,0 +1,114 @@
+[
+  {
+    "id": "era-jomon",
+    "name": "縄文",
+    "startYear": -14000,
+    "endYear": -300,
+    "color": "#8B4513"
+  },
+  {
+    "id": "era-yayoi",
+    "name": "弥生",
+    "startYear": -300,
+    "endYear": 300,
+    "color": "#9ACD32"
+  },
+  {
+    "id": "era-kofun",
+    "name": "古墳",
+    "startYear": 300,
+    "endYear": 593,
+    "color": "#CD853F"
+  },
+  {
+    "id": "era-asuka",
+    "name": "飛鳥",
+    "startYear": 593,
+    "endYear": 710,
+    "color": "#FF6347"
+  },
+  {
+    "id": "era-nara",
+    "name": "奈良",
+    "startYear": 710,
+    "endYear": 794,
+    "color": "#DC143C"
+  },
+  {
+    "id": "era-heian",
+    "name": "平安",
+    "startYear": 794,
+    "endYear": 1185,
+    "color": "#9932CC"
+  },
+  {
+    "id": "era-kamakura",
+    "name": "鎌倉",
+    "startYear": 1185,
+    "endYear": 1333,
+    "color": "#4169E1"
+  },
+  {
+    "id": "era-muromachi",
+    "name": "室町",
+    "startYear": 1336,
+    "endYear": 1573,
+    "color": "#2E8B57"
+  },
+  {
+    "id": "era-sengoku",
+    "name": "戦国",
+    "startYear": 1467,
+    "endYear": 1590,
+    "color": "#B22222"
+  },
+  {
+    "id": "era-azuchimomoyama",
+    "name": "安土桃山",
+    "startYear": 1573,
+    "endYear": 1603,
+    "color": "#FFD700"
+  },
+  {
+    "id": "era-edo",
+    "name": "江戸",
+    "startYear": 1603,
+    "endYear": 1868,
+    "color": "#191970"
+  },
+  {
+    "id": "era-meiji",
+    "name": "明治",
+    "startYear": 1868,
+    "endYear": 1912,
+    "color": "#FF4500"
+  },
+  {
+    "id": "era-taisho",
+    "name": "大正",
+    "startYear": 1912,
+    "endYear": 1926,
+    "color": "#DA70D6"
+  },
+  {
+    "id": "era-showa",
+    "name": "昭和",
+    "startYear": 1926,
+    "endYear": 1989,
+    "color": "#4682B4"
+  },
+  {
+    "id": "era-heisei",
+    "name": "平成",
+    "startYear": 1989,
+    "endYear": 2019,
+    "color": "#20B2AA"
+  },
+  {
+    "id": "era-reiwa",
+    "name": "令和",
+    "startYear": 2019,
+    "endYear": 2100,
+    "color": "#FF69B4"
+  }
+]

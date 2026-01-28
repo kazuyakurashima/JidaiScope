@@ -2,6 +2,7 @@
  * Root Layout - アプリ全体のナビゲーション構造
  * Sprint 1: 011 Navigation Architecture
  * Sprint 1: 012 Database Schema & API
+ * Sprint 1: 013 Data Preparation
  * Sprint 1: 016 Dark Theme
  */
 
@@ -12,6 +13,7 @@ import { useEffect, useMemo } from 'react';
 import 'react-native-reanimated';
 
 import { initializeDatabase } from '@/data/database';
+import { isDatabaseSeeded, seedDatabase } from '@/data/seed';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore } from '@/stores';
 
@@ -23,15 +25,28 @@ export default function RootLayout() {
   const { colors, isDark } = useTheme();
   const setDbReady = useAppStore((state) => state.setDbReady);
 
-  // データベース初期化（アプリ起動時に一度だけ実行）
+  // データベース初期化とシーディング（アプリ起動時に一度だけ実行）
   useEffect(() => {
-    initializeDatabase()
-      .then(() => {
+    const initDb = async () => {
+      try {
+        // 1. DBスキーマ初期化
+        await initializeDatabase();
+
+        // 2. シーディングが必要かチェック
+        const isSeeded = await isDatabaseSeeded();
+        if (!isSeeded) {
+          console.log('[App] Database is empty, starting seeding...');
+          await seedDatabase();
+        }
+
+        // 3. 準備完了
         setDbReady(true);
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error('Database initialization failed:', error);
-      });
+      }
+    };
+
+    initDb();
   }, [setDbReady]);
 
   // React Navigation テーマをカスタムカラーで構築

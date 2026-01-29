@@ -202,6 +202,21 @@ export async function getRelatedEvents(eventId: string): Promise<HistoricalEvent
   return rows.map(parseEventRow);
 }
 
+/**
+ * 複数のイベントIDから一括取得
+ */
+export async function getEventsByIds(ids: string[]): Promise<HistoricalEvent[]> {
+  if (ids.length === 0) return [];
+
+  const db = await getDatabase();
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = await db.getAllAsync<EventRow>(
+    `SELECT * FROM event WHERE id IN (${placeholders}) ORDER BY startDate ASC`,
+    ...ids
+  );
+  return rows.map(parseEventRow);
+}
+
 // JSON1 利用可否キャッシュ（undefined=未チェック, true/false=結果）
 let json1Available: boolean | undefined;
 

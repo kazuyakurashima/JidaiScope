@@ -38,7 +38,6 @@ import { useTheme } from '@/hooks/useTheme';
 import { useTimelineStore, useSettingsStore, useAppStore } from '@/stores';
 import { filterReigns } from '@/domain/timeline/layerFilter';
 import {
-  clampScrollX,
   yearToPixel,
   extractYearFromDate,
   isYearRangeVisible,
@@ -46,8 +45,6 @@ import {
   type CoordinateConfig,
 } from '@/domain/timeline/coordinateSystem';
 import {
-  MIN_ZOOM_LEVEL,
-  MAX_ZOOM_LEVEL,
   TIMELINE_AXIS_Y_RATIO,
   ERA_BAND_TOP_RATIO,
   ERA_BAND_BOTTOM_RATIO,
@@ -163,11 +160,23 @@ export function TimelineCanvas({
   const pinchStartZoom = useSharedValue(zoomLevel); // ピンチ開始時のズームレベル
   const prevScrollXRef = useRef(scrollX);
 
+
   // Font
   const font = useFont(ROBOTO_FONT, 12);
 
-  // Sync store with shared values
+  // ジェスチャーが最後に設定したscrollX値を追跡
+  const lastGestureScrollXRef = useRef<number | null>(null);
+
+  // Sync store with shared values（外部からの変更のみ）
   useEffect(() => {
+    // ジェスチャーによる変更の場合はスキップ（競合を防ぐ）
+    // EraPickerBarからのジャンプなど、外部からの変更のみ同期
+    if (lastGestureScrollXRef.current !== null &&
+        Math.abs(scrollX - lastGestureScrollXRef.current) < 1) {
+      // ジェスチャーが設定した値とほぼ同じなのでスキップ
+      return;
+    }
+    // 外部からの変更（EraPickerBarなど）→ translateXを更新
     translateX.value = scrollX;
   }, [scrollX, translateX]);
 
@@ -310,8 +319,11 @@ export function TimelineCanvas({
   const prevLODRef = useRef<LODLevel>(calculateLODLevel(zoomLevel));
 
   const handlePinchUpdate = useCallback(
-    (newZoom: number) => {
+    (newZoom: number, newScrollX: number) => {
       setZoom(newZoom);
+      setScroll(newScrollX);
+      // ジェスチャーが設定した値を記録（useEffectで競合を防ぐ）
+      lastGestureScrollXRef.current = newScrollX;
       // LODレベルが変わった場合のみ更新（パフォーマンス最適化）
       const newLOD = calculateLODLevel(newZoom);
       if (newLOD !== prevLODRef.current) {
@@ -319,16 +331,23 @@ export function TimelineCanvas({
         setLOD(newLOD);
       }
     },
-    [setZoom, setLOD]
+    [setZoom, setScroll, setLOD]
   );
+
+  // ピンチ開始時のスクロール位置とフォーカルポイントを保持
+  const pinchStartScrollX = useSharedValue(0);
+  const pinchFocalX = useSharedValue(0);
 
   const pinchGesture = useMemo(
     () =>
       Gesture.Pinch()
-        .onBegin(() => {
+        .onBegin((e) => {
           'worklet';
-          // ピンチ開始時のズームレベルを記録
+          // ピンチ開始時の状態を記録
           pinchStartZoom.value = scale.value;
+          pinchStartScrollX.value = translateX.value;
+          // フォーカルポイント（ピンチの中心点）を記録
+          pinchFocalX.value = e.focalX;
         })
         .onUpdate((e) => {
           'worklet';
@@ -336,15 +355,25 @@ export function TimelineCanvas({
           // MIN_ZOOM_LEVEL = 1, MAX_ZOOM_LEVEL = 100 をインライン化
           const newZoom = Math.max(1, Math.min(100, pinchStartZoom.value * e.scale));
           scale.value = newZoom;
+
+          // フォーカルポイントを維持するスクロール調整
+          // ピンチした位置が同じ年を指し続けるように
+          const zoomRatio = newZoom / pinchStartZoom.value;
+          const newScrollX = (pinchStartScrollX.value - pinchFocalX.value) * zoomRatio + pinchFocalX.value;
+          // スクロール範囲をクランプ
+          const minScrollX = screenWidth * (1 - newZoom);
+          const clampedScrollX = Math.max(minScrollX, Math.min(0, newScrollX));
+          translateX.value = clampedScrollX;
+
           // リアルタイムでストアとLODを更新
-          runOnJS(handlePinchUpdate)(newZoom);
+          runOnJS(handlePinchUpdate)(newZoom, clampedScrollX);
         })
         .onEnd(() => {
           'worklet';
-          // 最終値を確定（handlePinchUpdate で既に更新済み）
-          runOnJS(handlePinchUpdate)(scale.value);
+          // 最終値を確定
+          runOnJS(handlePinchUpdate)(scale.value, translateX.value);
         }),
-    [scale, pinchStartZoom, handlePinchUpdate]
+    [scale, pinchStartZoom, pinchStartScrollX, pinchFocalX, translateX, screenWidth, handlePinchUpdate]
   );
 
   const tapGesture = useMemo(
@@ -365,15 +394,19 @@ export function TimelineCanvas({
   const handleDoubleTapZoom = useCallback(
     (tapX: number, currentZoom: number, currentScrollX: number) => {
       // 新しいズームレベル計算（最大値で制限、または最小に戻す）
-      const newZoom = currentZoom >= MAX_ZOOM_LEVEL
-        ? MIN_ZOOM_LEVEL
-        : Math.min(MAX_ZOOM_LEVEL, currentZoom * DOUBLE_TAP_ZOOM_FACTOR);
+      // MIN_ZOOM_LEVEL = 1, MAX_ZOOM_LEVEL = 100
+      const newZoom = currentZoom >= 100
+        ? 1
+        : Math.min(100, currentZoom * DOUBLE_TAP_ZOOM_FACTOR);
 
       // タップ位置を基準にスクロール調整（focal point zoom）
       // タップした位置が同じ年を指すようにスクロールを調整
       const zoomRatio = newZoom / currentZoom;
       const newScrollX = (currentScrollX - tapX) * zoomRatio + tapX;
-      const clampedScrollX = clampScrollX(newScrollX, screenWidth, newZoom);
+      // clampScrollX をインライン化（外部関数呼び出しを避ける）
+      // minScrollX = screenWidth * (1 - zoomLevel), maxScrollX = 0
+      const minScrollX = screenWidth * (1 - newZoom);
+      const clampedScrollX = Math.max(minScrollX, Math.min(0, newScrollX));
 
       // 状態更新
       setZoom(newZoom);
@@ -422,31 +455,39 @@ export function TimelineCanvas({
   // Scroll sync and boundary detection
   // ==========================================================================
 
+  // ジェスチャーからのスクロール更新をストアに反映
+  const handleGestureScroll = useCallback(
+    (curr: number, prev: number) => {
+      const crossedEra = detectEraBoundaryCrossing(
+        prev,
+        curr,
+        eras,
+        screenWidth,
+        scale.value
+      );
+
+      if (crossedEra) {
+        triggerEraBoundaryHaptic();
+      }
+
+      prevScrollXRef.current = curr;
+      // ジェスチャーが設定した値を記録（useEffectで競合を防ぐ）
+      lastGestureScrollXRef.current = curr;
+      setScroll(curr);
+    },
+    [eras, screenWidth, scale, setScroll]
+  );
+
   useAnimatedReaction(
     () => translateX.value,
     (current, previous) => {
       'worklet';
       if (previous !== null && previous !== current) {
-        // 時代境界通過検出（JS側で実行）
-        runOnJS((curr: number, prev: number) => {
-          const crossedEra = detectEraBoundaryCrossing(
-            prev,
-            curr,
-            eras,
-            screenWidth,
-            scale.value
-          );
-
-          if (crossedEra) {
-            triggerEraBoundaryHaptic();
-          }
-
-          prevScrollXRef.current = curr;
-          setScroll(curr);
-        })(current, previous);
+        // 時代境界通過検出とストア更新（JS側で実行）
+        runOnJS(handleGestureScroll)(current, previous);
       }
     },
-    [eras, screenWidth, setScroll, scale]
+    [handleGestureScroll]
   );
 
   // ==========================================================================

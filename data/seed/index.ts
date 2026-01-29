@@ -3,6 +3,13 @@
  *
  * Loads initial historical data from JSON files into SQLite database.
  * Called on first app launch or when database is empty.
+ *
+ * ## データ規約
+ *
+ * ### 進行中在位の終了年 (ONGOING_REIGN_END_YEAR)
+ * 現在進行中の在位期間（今上天皇など）は `endYear: 2100` を暫定値として使用。
+ * この値は `@/domain/timeline/constants.ts` の `ONGOING_REIGN_END_YEAR` で定義。
+ * 関連ファイル: eras.json (era-reiwa), reigns.json (reign-emp-126)
  */
 
 import { getDatabase } from '../database';

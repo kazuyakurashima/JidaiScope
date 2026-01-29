@@ -23,7 +23,7 @@ import {
   ActionSheetIOS,
   Platform,
 } from 'react-native';
-import Share from 'react-native-share';
+import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
 
 import { TimelineCanvas, EraPickerBar } from '@/components/timeline';
@@ -76,16 +76,15 @@ export default function TimelineScreen() {
 
       const caption = generateCaption(eras, events, screenWidth);
 
-      await Share.open({
-        url: uri,
-        message: caption,
-        title: 'JidaiScope タイムライン',
-      });
-    } catch (error) {
-      // ユーザーがキャンセルした場合は無視
-      if ((error as Error).message !== 'User did not share') {
-        console.error('Share failed:', error);
+      // Expo Go では expo-sharing を使用（キャプションはタイトルのみ）
+      // 本番（Development Build）では react-native-share に切替
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          dialogTitle: caption,
+        });
       }
+    } catch (error) {
+      console.error('Share failed:', error);
     } finally {
       setIsCapturing(false);
     }

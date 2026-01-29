@@ -10,6 +10,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { initializeDatabase } from '@/data/database';
@@ -69,67 +70,69 @@ export default function RootLayout() {
   }), [colors, isDark]);
 
   return (
-    <ThemeProvider value={navigationTheme}>
-      <Stack
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: colors.bgSecondary,
-          },
-          headerTintColor: colors.text,
-          headerTitleStyle: {
-            color: colors.text,
-          },
-          contentStyle: {
-            backgroundColor: colors.bg,
-          },
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="event/[id]"
-          options={{
-            title: 'イベント詳細',
-            headerBackTitle: '戻る',
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={navigationTheme}>
+        <Stack
+          screenOptions={{
+            headerStyle: {
+              backgroundColor: colors.bgSecondary,
+            },
+            headerTintColor: colors.text,
+            headerTitleStyle: {
+              color: colors.text,
+            },
+            contentStyle: {
+              backgroundColor: colors.bg,
+            },
           }}
-        />
-        <Stack.Screen
-          name="person/[id]"
-          options={{
-            title: '人物詳細',
-            headerBackTitle: '戻る',
-          }}
-        />
-        <Stack.Screen
-          name="era/[id]"
-          options={{
-            title: '時代詳細',
-            headerBackTitle: '戻る',
-          }}
-        />
-        <Stack.Screen
-          name="settings"
-          options={{
-            presentation: 'modal',
-            title: '設定',
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="paywall"
-          options={{
-            presentation: 'modal',
-            title: 'Pro版',
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="onboarding"
-          options={{
-            headerShown: false,
-          }}
-        />
-      </Stack>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-    </ThemeProvider>
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="event/[id]"
+            options={{
+              title: 'イベント詳細',
+              headerBackTitle: '戻る',
+            }}
+          />
+          <Stack.Screen
+            name="person/[id]"
+            options={{
+              title: '人物詳細',
+              headerBackTitle: '戻る',
+            }}
+          />
+          <Stack.Screen
+            name="era/[id]"
+            options={{
+              title: '時代詳細',
+              headerBackTitle: '戻る',
+            }}
+          />
+          <Stack.Screen
+            name="settings"
+            options={{
+              presentation: 'modal',
+              title: '設定',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="paywall"
+            options={{
+              presentation: 'modal',
+              title: 'Pro版',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="onboarding/index"
+            options={{
+              headerShown: false,
+            }}
+          />
+        </Stack>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

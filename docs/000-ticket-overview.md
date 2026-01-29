@@ -415,7 +415,7 @@ Week 6-7 (Sprint 5):
 - [x] [032-person-detail-screen.md](032-person-detail-screen.md) - Person Detail ✅
 - [x] [033-source-display.md](033-source-display.md) - Source Display ✅
 - [x] [034-bookmarks-feature.md](034-bookmarks-feature.md) - Bookmarks ✅
-- [ ] [035-screenshot-sharing.md](035-screenshot-sharing.md) - Screenshot Sharing
+- [x] [035-screenshot-sharing.md](035-screenshot-sharing.md) - Screenshot Sharing ✅
 
 ### **Sprint 4: 課金・設定**
 
@@ -441,7 +441,7 @@ Week 6-7 (Sprint 5):
 | Sprint 0 | 001 Tech Validation | 2025-01-24 |
 | Sprint 1 | 010-016 基盤構築 (全7件) | 2025-01-26 |
 | Sprint 2 | 020-025 タイムラインコア (全6件) | 2025-01-28 |
-| Sprint 3 | 030-034 検索・詳細・ブックマーク (5/6件) | 2025-01-29 |
+| Sprint 3 | 030-035 検索・詳細・共有 (全6件) | 2025-01-29 |
 
 ---
 

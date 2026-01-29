@@ -25,7 +25,6 @@ import {
   Platform,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
-import Share from 'react-native-share';
 import { captureRef } from 'react-native-view-shot';
 
 import { TimelineCanvas, EraPickerBar } from '@/components/timeline';
@@ -90,6 +89,8 @@ export default function TimelineScreen() {
         }
       } else {
         // Development Build / Standalone: react-native-share でキャプション本文共有
+        // 動的インポート（Expo Go でのインポートエラーを回避）
+        const Share = (await import('react-native-share')).default;
         await Share.open({
           url: uri,
           message: caption,

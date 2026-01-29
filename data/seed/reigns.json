@@ -125,7 +125,7 @@
     { "id": "reign-emp-123", "personId": "person-emp-taisho", "title": "大正天皇", "type": "emperor", "startYear": 1912, "endYear": 1926 },
     { "id": "reign-emp-124", "personId": "person-emp-showa", "title": "昭和天皇", "type": "emperor", "startYear": 1926, "endYear": 1989 },
     { "id": "reign-emp-125", "personId": "person-emp-heisei", "title": "上皇", "type": "emperor", "startYear": 1989, "endYear": 2019 },
-    { "id": "reign-emp-126", "personId": "person-emp-reiwa", "title": "今上天皇", "type": "emperor", "startYear": 2019, "endYear": 2025 }
+    { "id": "reign-emp-126", "personId": "person-emp-reiwa", "title": "今上天皇", "type": "emperor", "startYear": 2019, "endYear": 2100 }
   ],
   "shoguns": [
     { "id": "reign-shogun-kam-01", "personId": "person-minamoto-yoritomo", "title": "源頼朝", "type": "kamakura_shogun", "startYear": 1192, "endYear": 1199 },

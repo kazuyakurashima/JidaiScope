@@ -52,7 +52,7 @@ So that クラスメイトや同級生と情報を共有できる
 | 種類             | 詳細                                              |
 | ---------------- | ------------------------------------------------- |
 | ✓ 入力依存       | 014 (Settings), 020 (Timeline Canvas)             |
-| ✗ コード依存     | react-native-view-shot, react-native-share, expo-media-library |
+| ✗ コード依存     | react-native-view-shot, react-native-share, expo-sharing, expo-media-library, expo-constants |
 | ✗ 他チケット依存 | なし                                              |
 
 ---
@@ -72,11 +72,16 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 import Share from 'react-native-share';
 import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
 import { generateCaption } from '@/utils/screenshotCaption';
+
+// 環境判定: Expo Go ではネイティブモジュールが使えないため expo-sharing を使用
+const isExpoGo = Constants.appOwnership === 'expo';
 
 export default function TimelineScreen() {
   const timelineRef = useRef<View>(null);
@@ -105,11 +110,20 @@ export default function TimelineScreen() {
       const uri = await captureScreenshot();
       if (!uri) return;
       const caption = generateCaption(eras, events, screenWidth);
-      await Share.open({
-        url: uri,
-        message: caption,
-        title: 'JidaiScope タイムライン',
-      });
+
+      if (isExpoGo) {
+        // Expo Go: expo-sharing（キャプションは dialogTitle のみ、本文には載らない）
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, { dialogTitle: caption });
+        }
+      } else {
+        // Development Build / Standalone: react-native-share でキャプション本文共有
+        await Share.open({
+          url: uri,
+          message: caption,
+          title: 'JidaiScope タイムライン',
+        });
+      }
     } catch (error) {
       if ((error as Error).message !== 'User did not share') {
         console.error('Share failed:', error);
@@ -225,12 +239,14 @@ export function generateCaption(
 ### 3. パッケージインストール
 
 ```bash
-npx expo install react-native-view-shot
+npx expo install react-native-view-shot expo-sharing expo-media-library expo-constants
 npm install react-native-share
-npx expo install expo-media-library
 ```
 
-> **注:** `expo-sharing` は `dialogTitle` のみで本文共有ができないため、`react-native-share` を使用
+> **注:**
+> - `expo-sharing` は `dialogTitle` のみで本文共有ができない
+> - `react-native-share` はネイティブモジュールのため Expo Go では動作しない
+> - **実装では `expo-constants` で環境判定し、Expo Go では `expo-sharing`、Development Build / Standalone では `react-native-share` を使い分ける**
 
 ---
 
@@ -253,7 +269,9 @@ npx expo install expo-media-library
 
 ### Phase 4: SNS 共有
 
-- [x] react-native-share 統合（キャプション共有対応）
+- [x] react-native-share 統合（Development Build 用、キャプション本文共有）
+- [x] expo-sharing フォールバック（Expo Go 用、dialogTitle のみ）
+- [x] expo-constants で環境判定（isExpoGo）
 - [x] iOS Share Sheet（ActionSheetIOS）
 - [x] Android Intent（Alert）
 

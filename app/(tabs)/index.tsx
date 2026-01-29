@@ -7,6 +7,7 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import * as MediaLibrary from 'expo-media-library';
 import { useRef, useState } from 'react';
@@ -24,6 +25,7 @@ import {
   Platform,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
+import Share from 'react-native-share';
 import { captureRef } from 'react-native-view-shot';
 
 import { TimelineCanvas, EraPickerBar } from '@/components/timeline';
@@ -32,6 +34,9 @@ import { useTimelineData } from '@/hooks/useTimelineData';
 import { useAppStore } from '@/stores';
 import { triggerHaptic } from '@/utils/haptics';
 import { generateCaption } from '@/utils/screenshotCaption';
+
+// Expo Go では react-native-share が動作しないため環境判定
+const isExpoGo = Constants.appOwnership === 'expo';
 
 export default function TimelineScreen() {
   const router = useRouter();
@@ -76,15 +81,26 @@ export default function TimelineScreen() {
 
       const caption = generateCaption(eras, events, screenWidth);
 
-      // Expo Go では expo-sharing を使用（キャプションはタイトルのみ）
-      // 本番（Development Build）では react-native-share に切替
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          dialogTitle: caption,
+      if (isExpoGo) {
+        // Expo Go: expo-sharing を使用（キャプションは dialogTitle のみ、本文には載らない）
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            dialogTitle: caption,
+          });
+        }
+      } else {
+        // Development Build / Standalone: react-native-share でキャプション本文共有
+        await Share.open({
+          url: uri,
+          message: caption,
+          title: 'JidaiScope タイムライン',
         });
       }
     } catch (error) {
-      console.error('Share failed:', error);
+      // ユーザーがキャンセルした場合は無視
+      if ((error as Error).message !== 'User did not share') {
+        console.error('Share failed:', error);
+      }
     } finally {
       setIsCapturing(false);
     }

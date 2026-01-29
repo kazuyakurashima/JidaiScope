@@ -387,34 +387,34 @@ Week 6-7 (Sprint 5):
 
 ### **Sprint 0: 技術検証**
 
-- [ ] [001-tech-validation.md](001-tech-validation.md) - Tech Validation & PoC
+- [x] [001-tech-validation.md](001-tech-validation.md) - Tech Validation & PoC ✅
 
 ### **Sprint 1: 基盤構築**
 
-- [ ] [010-build-environment.md](010-build-environment.md) - Build Environment Setup
-- [ ] [011-navigation-architecture.md](011-navigation-architecture.md) - Navigation Architecture
-- [ ] [012-database-schema.md](012-database-schema.md) - Database Schema & API
-- [ ] [013-data-preparation.md](013-data-preparation.md) - Historical Data Preparation
-- [ ] [014-state-management.md](014-state-management.md) - State Management
-- [ ] [015-design-tokens.md](015-design-tokens.md) - Design Tokens
-- [ ] [016-dark-theme.md](016-dark-theme.md) - Dark Theme
+- [x] [010-build-environment.md](010-build-environment.md) - Build Environment Setup ✅
+- [x] [011-navigation-architecture.md](011-navigation-architecture.md) - Navigation Architecture ✅
+- [x] [012-database-schema.md](012-database-schema.md) - Database Schema & API ✅
+- [x] [013-data-preparation.md](013-data-preparation.md) - Historical Data Preparation ✅
+- [x] [014-state-management.md](014-state-management.md) - State Management ✅
+- [x] [015-design-tokens.md](015-design-tokens.md) - Design Tokens ✅
+- [x] [016-dark-theme.md](016-dark-theme.md) - Dark Theme ✅
 
 ### **Sprint 2: タイムラインコア**
 
-- [ ] [020-timeline-core.md](020-timeline-core.md) - Timeline Core
-- [ ] [021-zoom-manager.md](021-zoom-manager.md) - Zoom Manager
-- [ ] [022-lod-manager.md](022-lod-manager.md) - LOD Manager
-- [ ] [023-era-picker.md](023-era-picker.md) - Era Picker
-- [ ] [024-layer-management.md](024-layer-management.md) - Layer Management
-- [ ] [025-haptics-feedback.md](025-haptics-feedback.md) - Haptics Feedback
+- [x] [020-timeline-core.md](020-timeline-core.md) - Timeline Core ✅
+- [x] [021-zoom-manager.md](021-zoom-manager.md) - Zoom Manager ✅
+- [x] [022-lod-manager.md](022-lod-manager.md) - LOD Manager ✅
+- [x] [023-era-picker.md](023-era-picker.md) - Era Picker ✅
+- [x] [024-layer-management.md](024-layer-management.md) - Layer Management ✅
+- [x] [025-haptics-feedback.md](025-haptics-feedback.md) - Haptics Feedback ✅
 
 ### **Sprint 3: 検索・詳細・共有**
 
-- [ ] [030-search-feature.md](030-search-feature.md) - Search Feature
-- [ ] [031-event-detail-screen.md](031-event-detail-screen.md) - Event Detail
-- [ ] [032-person-detail-screen.md](032-person-detail-screen.md) - Person Detail
-- [ ] [033-source-display.md](033-source-display.md) - Source Display
-- [ ] [034-bookmarks-feature.md](034-bookmarks-feature.md) - Bookmarks
+- [x] [030-search-feature.md](030-search-feature.md) - Search Feature ✅
+- [x] [031-event-detail-screen.md](031-event-detail-screen.md) - Event Detail ✅
+- [x] [032-person-detail-screen.md](032-person-detail-screen.md) - Person Detail ✅
+- [x] [033-source-display.md](033-source-display.md) - Source Display ✅
+- [x] [034-bookmarks-feature.md](034-bookmarks-feature.md) - Bookmarks ✅
 - [ ] [035-screenshot-sharing.md](035-screenshot-sharing.md) - Screenshot Sharing
 
 ### **Sprint 4: 課金・設定**
@@ -436,7 +436,12 @@ Week 6-7 (Sprint 5):
 
 ## 完了済みチケット
 
-_このセクションはチケット完了時に更新されます_
+| Sprint | チケット | 完了日 |
+|--------|----------|--------|
+| Sprint 0 | 001 Tech Validation | 2025-01-24 |
+| Sprint 1 | 010-016 基盤構築 (全7件) | 2025-01-26 |
+| Sprint 2 | 020-025 タイムラインコア (全6件) | 2025-01-28 |
+| Sprint 3 | 030-034 検索・詳細・ブックマーク (5/6件) | 2025-01-29 |
 
 ---
 
@@ -479,5 +484,5 @@ DB: expo-sqlite
 
 ---
 
-**最終更新:** 2025-01-25
-**バージョン:** 3.0
+**最終更新:** 2025-01-29
+**バージョン:** 3.1

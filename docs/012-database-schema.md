@@ -135,12 +135,12 @@ CREATE TABLE IF NOT EXISTS event (
   startDate TEXT NOT NULL,
   endDate TEXT,
   summary TEXT,
-  tags TEXT,
+  tags TEXT DEFAULT '[]',
   importanceLevel INTEGER DEFAULT 1,
   eraId TEXT NOT NULL,
   source TEXT,
-  relatedPersonIds TEXT,
-  relatedEventIds TEXT,
+  relatedPersonIds TEXT DEFAULT '[]',
+  relatedEventIds TEXT DEFAULT '[]',
   FOREIGN KEY (eraId) REFERENCES era(id)
 );
 
@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS person (
   activeStartYear INTEGER,
   activeEndYear INTEGER,
   summary TEXT,
-  roles TEXT,
+  roles TEXT DEFAULT '[]',
   importanceLevel INTEGER DEFAULT 1
 );
 
@@ -169,32 +169,49 @@ CREATE TABLE IF NOT EXISTS reign (
   FOREIGN KEY (personId) REFERENCES person(id)
 );
 
+-- Bookmark テーブル（V1で作成、V2でtitle列+UNIQUE制約追加）
+CREATE TABLE IF NOT EXISTS bookmark (
+  id TEXT PRIMARY KEY,
+  targetType TEXT NOT NULL,          -- 'event' | 'person'
+  targetId TEXT NOT NULL,
+  title TEXT,                         -- V2で追加: スナップショット用キャッシュ
+  createdAt TEXT NOT NULL,           -- ISO8601
+  note TEXT,                          -- ユーザーメモ（オプション）
+  UNIQUE(targetType, targetId)        -- V2で追加
+);
+
 -- インデックス
 CREATE INDEX IF NOT EXISTS idx_event_startDate ON event(startDate);
 CREATE INDEX IF NOT EXISTS idx_event_eraId ON event(eraId);
 CREATE INDEX IF NOT EXISTS idx_event_title ON event(title);
 CREATE INDEX IF NOT EXISTS idx_person_name ON person(name);
 CREATE INDEX IF NOT EXISTS idx_reign_year ON reign(startYear, endYear);
+CREATE INDEX IF NOT EXISTS idx_bookmark_target ON bookmark(targetType, targetId);
 ```
 
 ### TypeScript 型定義
 
 ```typescript
-// types/Event.ts
-export interface Event {
+// types/database.ts
+export type EventTag = 'politics' | 'war' | 'culture' | 'diplomacy' | 'economy' | 'social';
+export type ImportanceLevel = 0 | 1 | 2 | 3;
+
+export interface EventSource {
+  title: string;
+  page?: string;
+  url?: string;
+}
+
+export interface HistoricalEvent {
   id: string;
   title: string;
-  startDate: string;
-  endDate?: string;
-  summary: string;
-  tags: ('politics' | 'war' | 'culture' | 'diplomacy')[];
-  importanceLevel: 0 | 1 | 2 | 3;
+  startDate: string;           // YYYY-MM-DD or YYYY
+  endDate: string | null;
+  summary: string | null;
+  tags: EventTag[];
+  importanceLevel: ImportanceLevel;
   eraId: string;
-  source?: {
-    title: string;
-    page?: string;
-    url?: string;
-  };
+  source: EventSource | null;
   relatedPersonIds: string[];
   relatedEventIds: string[];
 }

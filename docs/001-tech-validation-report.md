@@ -158,7 +158,7 @@ app/(tabs)/
 - `triggerHaptic(type)`: 計測付きハプティクス発火
 - `triggerLODHaptic(from, to)`: LOD 切替時のハプティクス
 - `triggerEraBoundaryHaptic()`: 時代境界通過時
-- `triggerBookmarkHaptic()`: ブックマーク追加時
+- `triggerBookmarkHaptic()`: ブックマーク追加/削除時
 - `getHapticStats()`: 計測統計取得
 
 **ハプティクス種類:**
@@ -169,7 +169,7 @@ app/(tabs)/
 | medium | ダブルタップ、L2→L3 | ImpactFeedbackStyle.Medium |
 | heavy | 2段階以上ジャンプ | ImpactFeedbackStyle.Heavy |
 | selection | ズームアウト | selectionAsync |
-| success | ブックマーク追加 | NotificationFeedbackType.Success |
+| success | ブックマーク追加/削除 | NotificationFeedbackType.Success |
 
 **結果:** ✅ ユーティリティ実装完了
 

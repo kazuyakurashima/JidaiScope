@@ -8,7 +8,7 @@ import { Pressable, StyleSheet } from 'react-native';
 
 import { useTheme } from '@/hooks/useTheme';
 import { useBookmarkStore } from '@/stores/bookmarkStore';
-import { triggerHaptic } from '@/utils/haptics';
+import { triggerBookmarkHaptic } from '@/utils/haptics';
 
 // =============================================================================
 // Component
@@ -37,7 +37,7 @@ export function BookmarkButton({
   const bookmarked = isBookmarked(targetType, targetId);
 
   const handlePress = async () => {
-    void triggerHaptic('light');
+    void triggerBookmarkHaptic();
 
     if (bookmarked) {
       await removeBookmark(targetType, targetId);

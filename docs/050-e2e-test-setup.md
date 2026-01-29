@@ -227,6 +227,15 @@ e2e/
 
 ## 注意事項
 
+### testID 属性の追加
+
+**重要:** 本ドキュメントのテスト例で使用されている `testID`（`timeline-canvas`, `era-picker-edo`, `tab-search` 等）は、**050 実装時にコンポーネントへ追加する予定**です。現時点では各コンポーネントに testID 属性は設定されていません。
+
+050 実装時の作業:
+- 対象コンポーネントに `testID` prop を追加
+- 一貫した命名規則を適用（例: `screen-name`, `feature-action`）
+- 動的要素は `testID={`item-${index}`}` 形式で対応
+
 ### Expo との互換性
 
 - Expo managed workflow では Detox の設定に注意が必要

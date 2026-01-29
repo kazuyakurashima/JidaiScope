@@ -154,21 +154,24 @@ interface BookmarkState {
 // components/cards/BookmarkButton.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet } from 'react-native';
-import { triggerMediumHaptic } from '@/utils/haptics';
+import { useTheme } from '@/hooks/useTheme';
 import { useBookmarkStore } from '@/stores/bookmarkStore';
+import { triggerBookmarkHaptic } from '@/utils/haptics';
 
 interface BookmarkButtonProps {
   targetType: 'event' | 'person';
   targetId: string;
   title: string;
+  size?: number;
 }
 
-export function BookmarkButton({ targetType, targetId, title }: BookmarkButtonProps) {
+export function BookmarkButton({ targetType, targetId, title, size = 24 }: BookmarkButtonProps) {
+  const { colors, spacing } = useTheme();
   const { addBookmark, removeBookmark, isBookmarked } = useBookmarkStore();
   const bookmarked = isBookmarked(targetType, targetId);
 
   const handlePress = async () => {
-    await triggerMediumHaptic();
+    void triggerBookmarkHaptic();
 
     if (bookmarked) {
       await removeBookmark(targetType, targetId);
@@ -178,10 +181,10 @@ export function BookmarkButton({ targetType, targetId, title }: BookmarkButtonPr
   };
 
   return (
-    <Pressable onPress={handlePress} style={styles.button} hitSlop={8}>
+    <Pressable onPress={handlePress} style={[styles.button, { padding: spacing[2] }]} hitSlop={8}>
       <Ionicons
         name={bookmarked ? 'star' : 'star-outline'}
-        size={24}
+        size={size}
         color={bookmarked ? '#FDB813' : colors.textSecondary}
       />
     </Pressable>
@@ -297,12 +300,11 @@ const displayedBookmarks = searchQuery.length >= 2
 stores/
 └── bookmarkStore.ts         # Bookmark 状態管理
 
-components/
+components/cards/
 └── BookmarkButton.tsx       # ☆ ボタンコンポーネント
 
-app/bookmarks/
-├── index.tsx                # ブックマーク一覧
-└── search.tsx               # ブックマーク検索
+app/(tabs)/
+└── bookmarks.tsx            # ブックマーク一覧（検索機能統合）
 ```
 
 ---

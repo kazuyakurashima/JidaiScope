@@ -110,16 +110,18 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
   // Jump to era with animation
   const jumpToEra = useCallback(
     (era: Era) => {
-      // Trigger haptic feedback (fire-and-forget, don't await)
-      void triggerHaptic('selection');
+      try {
+        console.log('[EraPickerBar] Jump to era:', era.name);
+        // Trigger haptic feedback (fire-and-forget, don't await)
+        void triggerHaptic('selection');
 
-      // Cancel any ongoing animation
-      if (animationRef.current !== null) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
+        // Cancel any ongoing animation
+        if (animationRef.current !== null) {
+          cancelAnimationFrame(animationRef.current);
+          animationRef.current = null;
+        }
 
-      const pixelsPerYear = getPixelsPerYear(screenWidth, zoomLevel);
+        const pixelsPerYear = getPixelsPerYear(screenWidth, zoomLevel);
 
       // Calculate target scrollX to position era's start at left edge with some padding
       const targetYear = era.startYear;
@@ -156,6 +158,9 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
       };
 
       animationRef.current = requestAnimationFrame(animate);
+      } catch (error) {
+        console.error('[EraPickerBar] Jump error:', error);
+      }
     },
     [screenWidth, zoomLevel, scrollX, setScroll, getNow]
   );

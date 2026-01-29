@@ -48,7 +48,6 @@ import {
 import {
   MIN_ZOOM_LEVEL,
   MAX_ZOOM_LEVEL,
-  SCROLL_DECAY,
   TIMELINE_AXIS_Y_RATIO,
   ERA_BAND_TOP_RATIO,
   ERA_BAND_BOTTOM_RATIO,
@@ -201,10 +200,15 @@ export function TimelineCanvas({
 
   const handleEventPress = useCallback(
     (eventId: string) => {
-      if (onEventPress) {
-        onEventPress(eventId);
-      } else {
-        router.push(`/event/${eventId}`);
+      try {
+        console.log('[TimelineCanvas] Event pressed:', eventId);
+        if (onEventPress) {
+          onEventPress(eventId);
+        } else {
+          router.push(`/event/${eventId}`);
+        }
+      } catch (error) {
+        console.error('[TimelineCanvas] Event press error:', error);
       }
     },
     [onEventPress, router]
@@ -212,11 +216,15 @@ export function TimelineCanvas({
 
   const handleEraPress = useCallback(
     (eraId: string) => {
-      if (onEraPress) {
-        onEraPress(eraId);
-      } else {
-        // デフォルト動作: 時代詳細画面へ遷移
-        router.push(`/era/${eraId}`);
+      try {
+        console.log('[TimelineCanvas] Era pressed:', eraId);
+        if (onEraPress) {
+          onEraPress(eraId);
+        } else {
+          router.push(`/era/${eraId}`);
+        }
+      } catch (error) {
+        console.error('[TimelineCanvas] Era press error:', error);
       }
     },
     [onEraPress, router]
@@ -224,23 +232,37 @@ export function TimelineCanvas({
 
   const handleTap = useCallback(
     (x: number, y: number, currentScale: number, currentTranslateX: number) => {
-      const tapConfig: CoordinateConfig = {
-        screenWidth,
-        screenHeight,
-        zoomLevel: currentScale,
-        scrollX: currentTranslateX,
-      };
+      // 早期リターンでクラッシュを防止
+      if (typeof x !== 'number' || typeof y !== 'number') {
+        console.warn('[TimelineCanvas] Invalid tap coordinates');
+        return;
+      }
+      if (!events || !eras || events.length === 0 || eras.length === 0) {
+        console.warn('[TimelineCanvas] Data not ready for tap');
+        return;
+      }
 
-      const result = hitTest(x, y, {
-        ...tapConfig,
-        events,
-        eras,
-      });
+      try {
+        const tapConfig: CoordinateConfig = {
+          screenWidth,
+          screenHeight,
+          zoomLevel: currentScale,
+          scrollX: currentTranslateX,
+        };
 
-      if (result.type === 'event' && result.id) {
-        handleEventPress(result.id);
-      } else if (result.type === 'era' && result.id) {
-        handleEraPress(result.id);
+        const result = hitTest(x, y, {
+          ...tapConfig,
+          events,
+          eras,
+        });
+
+        if (result.type === 'event' && result.id) {
+          handleEventPress(result.id);
+        } else if (result.type === 'era' && result.id) {
+          handleEraPress(result.id);
+        }
+      } catch (error) {
+        console.error('[TimelineCanvas] Tap error:', error);
       }
     },
     [screenWidth, screenHeight, events, eras, handleEventPress, handleEraPress]
@@ -250,27 +272,38 @@ export function TimelineCanvas({
   // Gestures
   // ==========================================================================
 
+  // パンジェスチャー開始時のスクロール位置を保持
+  const panStartScrollX = useSharedValue(0);
+
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
+        .onBegin(() => {
+          'worklet';
+          // パン開始時のスクロール位置を記録
+          panStartScrollX.value = translateX.value;
+        })
         .onUpdate((e) => {
           'worklet';
-          // translationX は累積値なので前回との差分を計算
-          const newScrollX = scrollX + e.translationX;
-          const clamped = clampScrollX(newScrollX, screenWidth, scale.value);
+          // 開始位置からの移動量を計算（累積問題を回避）
+          const newScrollX = panStartScrollX.value + e.translationX;
+          // clampScrollX をインライン化（worklet から外部関数を呼べないため）
+          // minScrollX = screenWidth * (1 - zoomLevel)
+          const minScrollX = screenWidth * (1 - scale.value);
+          const clamped = Math.max(minScrollX, Math.min(0, newScrollX));
           translateX.value = clamped;
         })
         .onEnd((e) => {
           'worklet';
-          // 慣性スクロール
-          const minScroll = clampScrollX(-Infinity, screenWidth, scale.value);
+          // 慣性スクロール（SCROLL_DECAY = 0.95 をインライン化）
+          const minScrollX = screenWidth * (1 - scale.value);
           translateX.value = withDecay({
             velocity: e.velocityX,
-            deceleration: SCROLL_DECAY,
-            clamp: [minScroll, 0],
+            deceleration: 0.95,
+            clamp: [minScrollX, 0],
           });
         }),
-    [screenWidth, translateX, scale, scrollX]
+    [screenWidth, translateX, scale, panStartScrollX]
   );
 
   // ピンチズーム中のズーム＆LOD更新（リアルタイム）
@@ -300,10 +333,8 @@ export function TimelineCanvas({
         .onUpdate((e) => {
           'worklet';
           // 開始時のズームレベルを基準に計算（累積を防ぐ）
-          const newZoom = Math.max(
-            MIN_ZOOM_LEVEL,
-            Math.min(MAX_ZOOM_LEVEL, pinchStartZoom.value * e.scale)
-          );
+          // MIN_ZOOM_LEVEL = 1, MAX_ZOOM_LEVEL = 100 をインライン化
+          const newZoom = Math.max(1, Math.min(100, pinchStartZoom.value * e.scale));
           scale.value = newZoom;
           // リアルタイムでストアとLODを更新
           runOnJS(handlePinchUpdate)(newZoom);
@@ -320,7 +351,12 @@ export function TimelineCanvas({
     () =>
       Gesture.Tap().onEnd((e) => {
         'worklet';
-        runOnJS(handleTap)(e.x, e.y, scale.value, translateX.value);
+        // デバッグ: 引数を直接コピーして渡す
+        const x = e.x;
+        const y = e.y;
+        const currentScale = scale.value;
+        const currentTranslateX = translateX.value;
+        runOnJS(handleTap)(x, y, currentScale, currentTranslateX);
       }),
     [handleTap, scale, translateX]
   );
@@ -359,7 +395,10 @@ export function TimelineCanvas({
         .numberOfTaps(2)
         .onEnd((e) => {
           'worklet';
-          runOnJS(handleDoubleTapZoom)(e.x, scale.value, translateX.value);
+          const tapX = e.x;
+          const currentZoom = scale.value;
+          const currentScrollX = translateX.value;
+          runOnJS(handleDoubleTapZoom)(tapX, currentZoom, currentScrollX);
         }),
     [handleDoubleTapZoom, scale, translateX]
   );

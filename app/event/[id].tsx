@@ -23,6 +23,7 @@ import {
 import type { HistoricalEvent, Person } from '@/types/database';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore } from '@/stores/appStore';
+import { useBookmarkStore } from '@/stores/bookmarkStore';
 import { getEventById, getEventsByIds } from '@/data/repositories/EventRepository';
 import { getEraById } from '@/data/repositories/EraRepository';
 import { getPersonsByIds } from '@/data/repositories/PersonRepository';
@@ -45,6 +46,7 @@ export default function EventDetailScreen() {
   const router = useRouter();
   const { colors, typography, spacing } = useTheme();
   const dbReady = useAppStore((s) => s.dbReady);
+  const touchAccess = useBookmarkStore((s) => s.touchAccess);
 
   const [event, setEvent] = useState<HistoricalEvent | null>(null);
   const [eraName, setEraName] = useState<string | null>(null);
@@ -86,6 +88,9 @@ export default function EventDetailScreen() {
           const events = await getEventsByIds(eventData.relatedEventIds);
           setRelatedEvents(events);
         }
+
+        // アクセス順キャッシュを更新（ブックマーク済みの場合）
+        void touchAccess('event', id);
       } catch (error) {
         console.error('Failed to load event:', error);
       } finally {
@@ -94,7 +99,7 @@ export default function EventDetailScreen() {
     };
 
     void loadData();
-  }, [id, dbReady]);
+  }, [id, dbReady, touchAccess]);
 
   // ナビゲーション
   const handlePersonPress = useCallback(
@@ -155,7 +160,9 @@ export default function EventDetailScreen() {
           title: '',
           headerStyle: { backgroundColor: colors.bg },
           headerTintColor: colors.text,
-          headerRight: () => <BookmarkButton targetId={id!} />,
+          headerRight: () => (
+            <BookmarkButton targetType="event" targetId={id!} title={event.title} />
+          ),
         }}
       />
       <ScrollView

@@ -23,6 +23,7 @@ import {
 import type { HistoricalEvent, Person, PersonRole } from '@/types/database';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore } from '@/stores/appStore';
+import { useBookmarkStore } from '@/stores/bookmarkStore';
 import { getPersonById } from '@/data/repositories/PersonRepository';
 import { getEventsByPersonId } from '@/data/repositories/EventRepository';
 import { seirekiToWaka } from '@/utils/wakaCalendar';
@@ -51,6 +52,7 @@ export default function PersonDetailScreen() {
   const router = useRouter();
   const { colors, typography, spacing } = useTheme();
   const dbReady = useAppStore((s) => s.dbReady);
+  const touchAccess = useBookmarkStore((s) => s.touchAccess);
 
   const [person, setPerson] = useState<Person | null>(null);
   const [relatedEvents, setRelatedEvents] = useState<HistoricalEvent[]>([]);
@@ -74,6 +76,9 @@ export default function PersonDetailScreen() {
         // 関連イベントを取得
         const events = await getEventsByPersonId(id);
         setRelatedEvents(events);
+
+        // アクセス順キャッシュを更新（ブックマーク済みの場合）
+        void touchAccess('person', id);
       } catch (error) {
         console.error('Failed to load person:', error);
       } finally {
@@ -82,7 +87,7 @@ export default function PersonDetailScreen() {
     };
 
     void loadData();
-  }, [id, dbReady]);
+  }, [id, dbReady, touchAccess]);
 
   // ナビゲーション
   const handleEventPress = useCallback(
@@ -152,7 +157,9 @@ export default function PersonDetailScreen() {
           title: '',
           headerStyle: { backgroundColor: colors.bg },
           headerTintColor: colors.text,
-          headerRight: () => <BookmarkButton targetId={id!} />,
+          headerRight: () => (
+            <BookmarkButton targetType="person" targetId={id!} title={person.name} />
+          ),
         }}
       />
       <ScrollView

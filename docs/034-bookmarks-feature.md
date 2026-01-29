@@ -56,33 +56,33 @@ So that あとで素早く見返すことができる
 
 ## データ仕様
 
-### Bookmark テーブル（PRD セクション 10.2）
+### Bookmark テーブル（実装済み - V2 マイグレーション）
 
 ```typescript
 interface Bookmark {
   id: string; // UUID
-  userId?: string; // 将来: multi-user 対応
-  itemType: "event" | "person";
-  itemId: string; // event.id or person.id
-  title: string; // スナップショット用キャッシュ
+  targetType: "event" | "person"; // itemType から改名
+  targetId: string; // itemId から改名
+  title: string | null; // スナップショット用キャッシュ（V2 で追加）
   createdAt: string; // ISO8601
+  note: string | null; // メモ欄（オプション）
 }
 ```
 
-### SQL スキーマ（012 で定義）
+### SQL スキーマ（V2 マイグレーション適用済み）
 
 ```sql
 CREATE TABLE bookmark (
   id TEXT PRIMARY KEY,
-  item_type TEXT NOT NULL CHECK(item_type IN ('event', 'person')),
-  item_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(item_type, item_id)
+  targetType TEXT NOT NULL,
+  targetId TEXT NOT NULL,
+  title TEXT,
+  createdAt TEXT NOT NULL,
+  note TEXT,
+  UNIQUE(targetType, targetId)
 );
 
-CREATE INDEX idx_bookmark_type ON bookmark(item_type);
-CREATE INDEX idx_bookmark_created ON bookmark(created_at DESC);
+CREATE INDEX idx_bookmark_target ON bookmark(targetType, targetId);
 ```
 
 ### 関連テーブル
@@ -103,272 +103,144 @@ interface BookmarkedPerson extends Person {
 
 ## 実装ガイドライン
 
-### 1. Bookmark Store 作成（014 対応）
+### 1. Bookmark Store 作成（実装済み）
 
 ```typescript
 // stores/bookmarkStore.ts
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+interface BookmarkWithTitle {
+  id: string;
+  targetType: "event" | "person";
+  targetId: string;
+  title: string;
+  createdAt: string;
+}
+
 interface BookmarkState {
-  bookmarks: Bookmark[];
+  bookmarks: BookmarkWithTitle[];
+  isLoaded: boolean;
   loadBookmarks: () => Promise<void>;
   addBookmark: (
-    itemType: "event" | "person",
-    itemId: string,
+    targetType: "event" | "person",
+    targetId: string,
     title: string,
   ) => Promise<void>;
   removeBookmark: (
-    itemType: "event" | "person",
-    itemId: string,
+    targetType: "event" | "person",
+    targetId: string,
   ) => Promise<void>;
-  isBookmarked: (itemType: "event" | "person", itemId: string) => boolean;
-  searchBookmarks: (query: string) => Bookmark[];
+  isBookmarked: (targetType: "event" | "person", targetId: string) => boolean;
+  searchBookmarks: (query: string) => BookmarkWithTitle[];
+  /** 詳細画面訪問時にアクセス順を更新（最近アクセスキャッシュ用） */
+  touchAccess: (
+    targetType: "event" | "person",
+    targetId: string,
+  ) => Promise<void>;
 }
-
-export const useBookmarkStore = create<BookmarkState>((set, get) => ({
-  bookmarks: [],
-
-  loadBookmarks: async () => {
-    // SQLite から全件取得
-    const db = await openDatabaseAsync("jidaiscope.db");
-    const bookmarks = await db.getAllAsync<Bookmark>(
-      "SELECT * FROM bookmark ORDER BY created_at DESC",
-    );
-    set({ bookmarks });
-  },
-
-  addBookmark: async (itemType, itemId, title) => {
-    const db = await openDatabaseAsync("jidaiscope.db");
-    const id = generateUUID();
-
-    await db.runAsync(
-      `INSERT INTO bookmark (id, item_type, item_id, title) 
-       VALUES (?, ?, ?, ?)`,
-      [id, itemType, itemId, title],
-    );
-
-    // Store 更新
-    set((state) => ({
-      bookmarks: [
-        { id, itemType, itemId, title, createdAt: new Date().toISOString() },
-        ...state.bookmarks,
-      ],
-    }));
-  },
-
-  removeBookmark: async (itemType, itemId) => {
-    const db = await openDatabaseAsync("jidaiscope.db");
-
-    await db.runAsync(
-      `DELETE FROM bookmark WHERE item_type = ? AND item_id = ?`,
-      [itemType, itemId],
-    );
-
-    // Store 更新
-    set((state) => ({
-      bookmarks: state.bookmarks.filter(
-        (b) => !(b.itemType === itemType && b.itemId === itemId),
-      ),
-    }));
-  },
-
-  isBookmarked: (itemType, itemId) => {
-    const { bookmarks } = get();
-    return bookmarks.some(
-      (b) => b.itemType === itemType && b.itemId === itemId,
-    );
-  },
-
-  searchBookmarks: (query) => {
-    const { bookmarks } = get();
-    if (query.length < 2) return [];
-
-    const lowerQuery = query.toLowerCase();
-    return bookmarks.filter((b) => b.title.toLowerCase().includes(lowerQuery));
-  },
-}));
 ```
 
-### 2. Bookmark ボタン（Event 詳細）
+**実装特徴:**
+
+- **キャッシュ戦略**: AsyncStorage で最近 10 件をキャッシュ（アクセス順）
+- **重複防止**: addBookmark で DB + Store 両方をチェック
+- **N+1 最適化**: タイトル取得は Promise.all で並列化
+- **アクセス順追跡**: touchAccess で詳細画面訪問時にキャッシュ順を更新
+
+### 2. Bookmark ボタン（実装済み）
 
 ```typescript
-// components/BookmarkButton.tsx
-import Feather from '@expo/vector-icons/Feather';
+// components/cards/BookmarkButton.tsx
+import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet } from 'react-native';
 import { triggerMediumHaptic } from '@/utils/haptics';
 import { useBookmarkStore } from '@/stores/bookmarkStore';
 
 interface BookmarkButtonProps {
-  itemType: 'event' | 'person';
-  itemId: string;
+  targetType: 'event' | 'person';
+  targetId: string;
   title: string;
 }
 
-export function BookmarkButton({ itemType, itemId, title }: BookmarkButtonProps) {
+export function BookmarkButton({ targetType, targetId, title }: BookmarkButtonProps) {
   const { addBookmark, removeBookmark, isBookmarked } = useBookmarkStore();
-  const bookmarked = isBookmarked(itemType, itemId);
+  const bookmarked = isBookmarked(targetType, targetId);
 
   const handlePress = async () => {
     await triggerMediumHaptic();
 
     if (bookmarked) {
-      await removeBookmark(itemType, itemId);
+      await removeBookmark(targetType, targetId);
     } else {
-      await addBookmark(itemType, itemId, title);
+      await addBookmark(targetType, targetId, title);
     }
   };
 
   return (
-    <Pressable
-      onPress={handlePress}
-      style={styles.button}
-      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-    >
-      <Feather
-        name={bookmarked ? 'star' : 'star'}
+    <Pressable onPress={handlePress} style={styles.button} hitSlop={8}>
+      <Ionicons
+        name={bookmarked ? 'star' : 'star-outline'}
         size={24}
-        color={bookmarked ? '#FDB813' : '#718096'}
-        style={{ opacity: bookmarked ? 1 : 0.5 }}
+        color={bookmarked ? '#FDB813' : colors.textSecondary}
       />
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  button: {
-    padding: 8,
-  },
-});
 ```
 
-### 3. Bookmark ボタンを Event Detail に統合（031 対応）
+### 3. Bookmark ボタンを Event Detail に統合（実装済み）
 
 ```typescript
-// app/event/[id].tsx
-import { BookmarkButton } from '@/components/BookmarkButton';
-
-export default function EventDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const event = useEventStore((s) => s.getEvent(id!));
-
-  if (!event) return <Text>Not found</Text>;
-
-  return (
-    <SafeAreaView>
-      <View style={styles.header}>
-        <Text style={styles.title}>{event.title}</Text>
-        <BookmarkButton itemType="event" itemId={event.id} title={event.title} />
-      </View>
-
-      {/* ... 既存コンテンツ */}
-    </SafeAreaView>
-  );
-}
+// app/event/[id].tsx - headerRight に配置
+<Stack.Screen
+  options={{
+    headerRight: () => (
+      <BookmarkButton targetType="event" targetId={id!} title={event.title} />
+    ),
+  }}
+/>
 ```
 
-### 4. Bookmark 一覧画面
+### 4. Bookmark 一覧画面（実装済み）
 
 ```typescript
-// app/bookmarks/index.tsx
-import { FlatList, Text, View, StyleSheet } from 'react-native';
-import { useBookmarkStore } from '@/stores/bookmarkStore';
-import { useEffect } from 'react';
-
-export default function BookmarksScreen() {
-  const bookmarks = useBookmarkStore((s) => s.bookmarks);
-  const loadBookmarks = useBookmarkStore((s) => s.loadBookmarks);
-
-  useEffect(() => {
-    loadBookmarks();
-  }, []);
+// app/(tabs)/bookmarks.tsx - 一覧画面と検索機能を統合
+function BookmarkItem({ item, onPress, onDelete }: BookmarkItemProps) {
+  // 削除ボタンのイベント伝播防止
+  const handleDelete = (e: { stopPropagation?: () => void }) => {
+    e.stopPropagation?.();
+    onDelete();
+  };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>ブックマーク</Text>
-
-      <FlatList
-        data={bookmarks}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <BookmarkItem item={item} />
-        )}
-        ListEmptyComponent={
-          <Text style={styles.empty}>ブックマークはまだありません</Text>
-        }
-      />
-    </View>
-  );
-}
-
-function BookmarkItem({ item }: { item: Bookmark }) {
-  const router = useRouter();
-
-  return (
-    <Pressable
-      onPress={() => {
-        if (item.itemType === 'event') {
-          router.push(`/event/${item.itemId}`);
-        } else {
-          router.push(`/person/${item.itemId}`);
-        }
-      }}
-      style={styles.item}
-    >
-      <View>
-        <Text style={styles.itemTitle}>{item.title}</Text>
-        <Text style={styles.itemType}>
-          {item.itemType === 'event' ? 'イベント' : '人物'}
-        </Text>
+    <Pressable onPress={onPress}>
+      <View style={styles.itemContent}>
+        <Ionicons
+          name={item.targetType === 'event' ? 'calendar-outline' : 'person-outline'}
+          size={20}
+        />
+        <View>
+          <Text>{item.title}</Text>
+          <Text>{item.targetType === 'event' ? 'イベント' : '人物'}</Text>
+        </View>
       </View>
+      <Pressable onPress={handleDelete} hitSlop={8}>
+        <Ionicons name="trash-outline" size={18} />
+      </Pressable>
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  title: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
-  item: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  itemTitle: { fontSize: 16, fontWeight: '500' },
-  itemType: { fontSize: 12, color: '#718096', marginTop: 4 },
-  empty: { textAlign: 'center', color: '#A0AEC0', marginTop: 32 },
-});
 ```
 
-### 5. Bookmark 検索
+### 5. Bookmark 検索（一覧画面内に統合）
 
 ```typescript
-// app/bookmarks/search.tsx
-import { TextInput, FlatList } from 'react-native';
-import { useBookmarkStore } from '@/stores/bookmarkStore';
-import { useState, useCallback } from 'react';
-
-export default function BookmarkSearchScreen() {
-  const [query, setQuery] = useState('');
-  const searchBookmarks = useBookmarkStore((s) => s.searchBookmarks);
-  const results = useCallback(() => searchBookmarks(query), [query, searchBookmarks])();
-
-  return (
-    <View>
-      <TextInput
-        placeholder="ブックマークを検索"
-        value={query}
-        onChangeText={setQuery}
-        style={styles.input}
-      />
-
-      <FlatList
-        data={results}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <BookmarkItem item={item} />}
-      />
-    </View>
-  );
-}
+// 検索バーで 2 文字以上入力時に searchBookmarks を呼び出し
+const [searchQuery, setSearchQuery] = useState('');
+const displayedBookmarks = searchQuery.length >= 2
+  ? searchBookmarks(searchQuery)
+  : bookmarks;
 ```
 
 ---
@@ -377,42 +249,45 @@ export default function BookmarkSearchScreen() {
 
 ### Phase 1: SQLite スキーマ（012 対応）
 
-- [ ] bookmark テーブル定義
-- [ ] UNIQUE 制約（item_type, item_id）
-- [ ] インデックス作成
+- [x] bookmark テーブル定義
+- [x] UNIQUE 制約（targetType, targetId）
+- [x] インデックス作成
 
 ### Phase 2: Bookmark Store 実装
 
-- [ ] useBookmarkStore 作成
-- [ ] addBookmark/removeBookmark 関数
-- [ ] isBookmarked 判定ロジック
-- [ ] searchBookmarks インクリメンタル検索
+- [x] useBookmarkStore 作成
+- [x] addBookmark/removeBookmark 関数（重複防止付き）
+- [x] isBookmarked 判定ロジック
+- [x] searchBookmarks インクリメンタル検索
+- [x] touchAccess アクセス順更新
 
 ### Phase 3: Event/Person 詳細画面に ☆ ボタン
 
-- [ ] BookmarkButton コンポーネント作成
-- [ ] Event 詳細に統合（031）
-- [ ] Person 詳細に統合（032）
-- [ ] タップで store 更新
+- [x] BookmarkButton コンポーネント作成（☆スターアイコン、金色）
+- [x] Event 詳細に統合（031）
+- [x] Person 詳細に統合（032）
+- [x] タップで store 更新
+- [x] 詳細画面訪問時に touchAccess 呼び出し
 
 ### Phase 4: Bookmark 一覧画面
 
-- [ ] app/bookmarks/index.tsx 作成
-- [ ] FlatList で全件表示
-- [ ] Item タップで詳細遷移
-- [ ] Empty state 表示
+- [x] app/(tabs)/bookmarks.tsx 作成
+- [x] FlatList で全件表示
+- [x] Item タップで詳細遷移
+- [x] Empty state 表示
+- [x] 削除機能
 
 ### Phase 5: Bookmark 検索
 
-- [ ] app/bookmarks/search.tsx 作成
-- [ ] 2 文字トリガーのインクリメンタル検索
-- [ ] 検索結果表示
+- [x] 一覧画面内に検索バー統合
+- [x] 2 文字トリガーのインクリメンタル検索
+- [x] 検索結果表示
 
 ### Phase 6: テスト・最適化
 
-- [ ] ブックマーク追加/削除テスト
-- [ ] オフライン時の動作確認
-- [ ] パフォーマンス（DB クエリ最適化）
+- [x] ブックマーク追加/削除テスト
+- [x] AsyncStorage キャッシュ（最近 10 件）
+- [x] パフォーマンス（Promise.all で N+1 最適化）
 
 ---
 
@@ -448,5 +323,5 @@ app/bookmarks/
 **作成日:** 2025-01-25
 **優先度:** P2
 **推定工数:** 2d
-**ステータス:** Not Started
+**ステータス:** Completed
 **ブロッカー:** 012 (bookmark テーブル), 031/032 (詳細画面)

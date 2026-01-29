@@ -8,7 +8,7 @@
     "tags": ["culture"],
     "importanceLevel": 3,
     "eraId": "era-jomon",
-    "source": null,
+    "source": { "title": "山川 詳説日本史", "page": "8-11" },
     "relatedPersonIds": [],
     "relatedEventIds": []
   },
@@ -34,7 +34,7 @@
     "tags": ["culture", "economy"],
     "importanceLevel": 3,
     "eraId": "era-yayoi",
-    "source": { "title": "山川 詳説日本史", "page": "12-15" },
+    "source": { "title": "山川 詳説日本史", "page": "12-15", "url": "https://www.yamakawa.co.jp/product/detail/2083" },
     "relatedPersonIds": [],
     "relatedEventIds": []
   },

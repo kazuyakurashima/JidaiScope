@@ -15,25 +15,34 @@ import { triggerHaptic } from '@/utils/haptics';
 // =============================================================================
 
 interface BookmarkButtonProps {
-  /** ブックマーク対象のID（event-xxx または person-xxx） */
+  /** ターゲットの種類 */
+  targetType: 'event' | 'person';
+  /** ターゲットのID */
   targetId: string;
+  /** 表示用タイトル（ブックマーク保存時に使用） */
+  title: string;
   /** ボタンサイズ */
   size?: number;
 }
 
-export function BookmarkButton({ targetId, size = 24 }: BookmarkButtonProps) {
+export function BookmarkButton({
+  targetType,
+  targetId,
+  title,
+  size = 24,
+}: BookmarkButtonProps) {
   const { colors, spacing } = useTheme();
-  const { bookmarks, addBookmark, removeBookmark } = useBookmarkStore();
+  const { addBookmark, removeBookmark, isBookmarked } = useBookmarkStore();
 
-  const isBookmarked = bookmarks.includes(targetId);
+  const bookmarked = isBookmarked(targetType, targetId);
 
   const handlePress = async () => {
     void triggerHaptic('light');
 
-    if (isBookmarked) {
-      await removeBookmark(targetId);
+    if (bookmarked) {
+      await removeBookmark(targetType, targetId);
     } else {
-      await addBookmark(targetId);
+      await addBookmark(targetType, targetId, title);
     }
   };
 
@@ -44,9 +53,9 @@ export function BookmarkButton({ targetId, size = 24 }: BookmarkButtonProps) {
       hitSlop={8}
     >
       <Ionicons
-        name={isBookmarked ? 'heart' : 'heart-outline'}
+        name={bookmarked ? 'star' : 'star-outline'}
         size={size}
-        color={isBookmarked ? colors.error : colors.textSecondary}
+        color={bookmarked ? '#FDB813' : colors.textSecondary}
       />
     </Pressable>
   );

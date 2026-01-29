@@ -309,7 +309,7 @@ async function seedEvents(db: Awaited<ReturnType<typeof getDatabase>>): Promise<
     tags: string[];
     importanceLevel: number;
     eraId: string;
-    source: { title: string; page?: string } | null;
+    source: { title: string; page?: string; url?: string } | null;
     relatedPersonIds: string[];
     relatedEventIds: string[];
   }>) {

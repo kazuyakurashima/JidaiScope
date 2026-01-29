@@ -134,6 +134,7 @@ export interface Bookmark {
   id: string;
   targetType: BookmarkTargetType;
   targetId: string;
+  title: string | null;
   createdAt: string; // ISO 8601
   note: string | null;
 }
@@ -142,6 +143,7 @@ export interface BookmarkRow {
   id: string;
   targetType: string;
   targetId: string;
+  title: string | null;
   createdAt: string;
   note: string | null;
 }

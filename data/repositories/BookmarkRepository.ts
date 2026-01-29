@@ -15,6 +15,7 @@ function parseBookmarkRow(row: BookmarkRow): Bookmark {
     id: row.id,
     targetType: row.targetType as BookmarkTargetType,
     targetId: row.targetId,
+    title: row.title,
     createdAt: row.createdAt,
     note: row.note,
   };
@@ -88,11 +89,12 @@ export async function isBookmarked(
 export async function addBookmark(bookmark: Bookmark): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(
-    `INSERT OR REPLACE INTO bookmark (id, targetType, targetId, createdAt, note)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT OR IGNORE INTO bookmark (id, targetType, targetId, title, createdAt, note)
+     VALUES (?, ?, ?, ?, ?, ?)`,
     bookmark.id,
     bookmark.targetType,
     bookmark.targetId,
+    bookmark.title,
     bookmark.createdAt,
     bookmark.note
   );

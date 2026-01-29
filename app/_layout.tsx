@@ -16,6 +16,7 @@ import { initializeDatabase } from '@/data/database';
 import { isDatabaseSeeded, seedDatabase } from '@/data/seed';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore } from '@/stores';
+import { useBookmarkStore } from '@/stores/bookmarkStore';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -24,6 +25,7 @@ export const unstable_settings = {
 export default function RootLayout() {
   const { colors, isDark } = useTheme();
   const setDbReady = useAppStore((state) => state.setDbReady);
+  const loadBookmarks = useBookmarkStore((state) => state.loadBookmarks);
 
   // データベース初期化とシーディング（アプリ起動時に一度だけ実行）
   useEffect(() => {
@@ -41,13 +43,16 @@ export default function RootLayout() {
 
         // 3. 準備完了
         setDbReady(true);
+
+        // 4. ブックマーク読み込み（詳細画面で即座に使えるよう）
+        await loadBookmarks();
       } catch (error) {
         console.error('Database initialization failed:', error);
       }
     };
 
     initDb();
-  }, [setDbReady]);
+  }, [setDbReady, loadBookmarks]);
 
   // React Navigation テーマをカスタムカラーで構築
   const navigationTheme = useMemo(() => ({

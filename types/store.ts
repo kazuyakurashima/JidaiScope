@@ -39,14 +39,25 @@ export interface SearchState {
   touchHistory: (keyword: string) => void;
 }
 
+export interface BookmarkWithTitle {
+  id: string;
+  targetType: 'event' | 'person';
+  targetId: string;
+  title: string;
+  createdAt: string;
+}
+
 export interface BookmarkState {
-  bookmarks: string[];
+  bookmarks: BookmarkWithTitle[];
   isLoaded: boolean;
 
   loadBookmarks: () => Promise<void>;
-  addBookmark: (id: string) => Promise<void>;
-  removeBookmark: (id: string) => Promise<void>;
-  getBookmarks: () => string[];
+  addBookmark: (targetType: 'event' | 'person', targetId: string, title: string) => Promise<void>;
+  removeBookmark: (targetType: 'event' | 'person', targetId: string) => Promise<void>;
+  isBookmarked: (targetType: 'event' | 'person', targetId: string) => boolean;
+  searchBookmarks: (query: string) => BookmarkWithTitle[];
+  /** 詳細画面訪問時にアクセス順を更新（最近アクセスキャッシュ用） */
+  touchAccess: (targetType: 'event' | 'person', targetId: string) => Promise<void>;
 }
 
 export interface AppState {

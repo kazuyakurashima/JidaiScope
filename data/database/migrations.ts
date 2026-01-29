@@ -7,7 +7,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { getDatabase } from './connection';
 
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 2;
 
 /**
  * マイグレーション定義
@@ -95,6 +95,36 @@ const migrations: Record<number, string[]> = {
       version INTEGER PRIMARY KEY,
       appliedAt TEXT NOT NULL
     )`,
+  ],
+
+  // Version 2: Bookmark テーブルに title 追加 + UNIQUE 制約
+  2: [
+    // title 列を追加
+    `ALTER TABLE bookmark ADD COLUMN title TEXT`,
+
+    // 既存の bookmark テーブルを一時テーブルにリネーム
+    `ALTER TABLE bookmark RENAME TO bookmark_old`,
+
+    // 新しい bookmark テーブルを UNIQUE 制約付きで作成
+    `CREATE TABLE bookmark (
+      id TEXT PRIMARY KEY,
+      targetType TEXT NOT NULL,
+      targetId TEXT NOT NULL,
+      title TEXT,
+      createdAt TEXT NOT NULL,
+      note TEXT,
+      UNIQUE(targetType, targetId)
+    )`,
+
+    // データを移行
+    `INSERT OR IGNORE INTO bookmark (id, targetType, targetId, title, createdAt, note)
+     SELECT id, targetType, targetId, title, createdAt, note FROM bookmark_old`,
+
+    // 古いテーブルを削除
+    `DROP TABLE bookmark_old`,
+
+    // インデックス再作成
+    `CREATE INDEX IF NOT EXISTS idx_bookmark_target ON bookmark(targetType, targetId)`,
   ],
 };
 

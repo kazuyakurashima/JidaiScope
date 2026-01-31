@@ -254,13 +254,20 @@ const shouldShowEraLabel = (era: Era, lodLevel: LODLevel, config: CoordinateConf
 
 ## Todo リスト
 
-### Phase 1: 年代表記統一
-- [ ] `utils/formatYear.ts` 作成（`formatYear`, `formatYearShort`, `formatYearRange`）
-- [ ] `app/era/[id].tsx` 修正（`formatYear` 関数と `yearRange` 変数）
-- [ ] `app/event/[id].tsx` 修正（`formatDate` 関数で負の年対応）
-- [ ] `app/person/[id].tsx` 修正（`formatLifespan`/`formatActivePeriod` 関数で負の年対応）
-- [ ] `domain/search/searchService.ts` 修正
-- [ ] `components/timeline/EraPickerBar.tsx` 修正
+### Phase 1: 年代表記統一 ✅
+- [x] `utils/formatYear.ts` 作成（`formatYear`, `formatYearShort`, `formatYearRange`）
+- [x] `app/era/[id].tsx` 修正（`formatYear` 関数と `yearRange` 変数）
+- [x] `app/event/[id].tsx` 修正（`formatDate` 関数で負の年対応）
+- [x] `app/person/[id].tsx` 修正（`formatLifespan`/`formatActivePeriod` 関数で負の年対応）
+- [x] `domain/search/searchService.ts` 修正
+- [x] `components/timeline/EraPickerBar.tsx` 修正
+
+### Phase 1.5: 和暦基盤 ✅（v4.0追加）
+- [x] `data/seed/warekiEras.json` 作成（248元号、sequence対応）
+- [x] `data/repositories/WarekiRepository.ts` 作成
+- [x] `data/database/migrations.ts` v4追加（sequence列）
+- [x] `data/seed/index.ts` バージョン管理機構追加
+- [x] `utils/wakaCalendar.ts` DB参照方式に更新
 
 ### Phase 2: 年代ルーラー
 - [ ] `YEAR_RULER_INTERVALS` 定数追加
@@ -276,7 +283,7 @@ const shouldShowEraLabel = (era: Era, lodLevel: LODLevel, config: CoordinateConf
 
 ### Phase 4: テスト
 - [ ] 各LODレベルで目盛り表示確認
-- [ ] 紀元前の年代表示確認
+- [x] 紀元前の年代表示確認（Phase 1で実施）
 - [ ] ラベル重なりなし確認
 
 ---
@@ -300,12 +307,22 @@ components/timeline/
 **更新日:** 2026-01-31
 **優先度:** P0（P1から昇格）
 **推定工数:** 1.5d（全時代和暦対応を含む）
-**ステータス:** Not Started
+**ステータス:** In Progress（Phase 1 + 1.5 完了、Phase 2-3 残）
 **ブロッカー:** 020 (Timeline Core) ✅
 
 ---
 
 ## 変更履歴
+
+### v4.2 (2026-01-31) - Phase 1 + 1.5 実装完了
+- **Phase 1 完了**: 年代表記統一（formatYear.ts + 全UI画面修正）
+- **Phase 1.5 完了**: 和暦基盤実装
+  - warekiEras.json: 248元号データ（大化〜令和）
+  - WarekiRepository.ts: DB アクセス層
+  - sequence フィールド: 同年改元対応（749年、1097年）
+  - 南北朝 period 区別: 南北朝-南朝 / 南北朝-北朝
+  - バージョン管理: 既存DB自動更新機構
+- ステータスを Not Started → In Progress に更新
 
 ### v4.1 (2026-01-31)
 - 和暦データソースを明確化: DB (013 Data Preparation) を SSOT とする

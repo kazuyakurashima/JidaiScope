@@ -1,10 +1,19 @@
 /**
  * wakaCalendar.ts - 和暦⇔西暦変換ユーティリティ
- * Sprint 3: 030 Search Feature
+ * Sprint 3: 030 Search Feature / 036 Year Ruler
  *
- * MVP スコープ: 明治〜令和（5元号）のみ対応
- * v1.1 で慶応以前の元号を追加予定
+ * 全時代対応（大化645年〜令和）
+ * - DB (wareki_eras) を Single Source of Truth (SSOT) として使用
+ * - 近代元号（明治〜令和）は同期APIとしてフォールバック提供
  */
+
+import {
+  getAllWarekiEras,
+  getWarekiByName,
+  getWarekiByYear,
+  searchWarekiByName,
+  type WarekiEra,
+} from '@/data/repositories';
 
 // =============================================================================
 // Types
@@ -31,12 +40,12 @@ export interface WakaParseResult {
 }
 
 // =============================================================================
-// Constants - 近代元号マスター（MVP: 明治〜令和）
+// Constants - 近代元号（同期API用フォールバック）
 // =============================================================================
 
 /**
  * 近代元号リスト（明治〜令和）
- * 注意: 元年 = 1年として計算
+ * 同期APIのフォールバックとして使用
  */
 export const MODERN_ERAS: JapaneseEra[] = [
   { name: '明治', reading: 'めいじ', startYear: 1868, endYear: 1912 },
@@ -46,57 +55,166 @@ export const MODERN_ERAS: JapaneseEra[] = [
   { name: '令和', reading: 'れいわ', startYear: 2019, endYear: null },
 ];
 
-/**
- * 元号名から元号情報を取得するマップ
- */
-const ERA_MAP = new Map<string, JapaneseEra>(
+const MODERN_ERA_MAP = new Map<string, JapaneseEra>(
   MODERN_ERAS.map((era) => [era.name, era])
 );
 
 // =============================================================================
-// Waka → Seireki Conversion
+// DB-based Async Functions (全時代対応)
 // =============================================================================
 
+/** 元号データキャッシュ */
+let cachedEras: WarekiEra[] | null = null;
+let cachedEraMap: Map<string, WarekiEra> | null = null;
+
 /**
- * 和暦テキストを西暦に変換
- * @param wakaText 和暦テキスト（例: "明治元年", "令和3年"）
- * @returns 西暦年、変換不可の場合は null
- *
- * 対応パターン:
- * - "明治元年" → 1868
- * - "明治1年" → 1868
- * - "令和3年" → 2021
- * - "昭和64年" → 1989
+ * 元号キャッシュを取得（DB から）
  */
-export function wakaToSeireki(wakaText: string): number | null {
-  // 正規化: 全角数字を半角に、スペース削除
+async function getEraCache(): Promise<{
+  eras: WarekiEra[];
+  map: Map<string, WarekiEra>;
+}> {
+  if (cachedEras && cachedEraMap) {
+    return { eras: cachedEras, map: cachedEraMap };
+  }
+
+  try {
+    cachedEras = await getAllWarekiEras();
+    cachedEraMap = new Map(cachedEras.map((era) => [era.name, era]));
+    return { eras: cachedEras, map: cachedEraMap };
+  } catch {
+    // DB 未初期化時は空を返す
+    return { eras: [], map: new Map() };
+  }
+}
+
+/**
+ * キャッシュをクリア（データ更新時に呼び出し）
+ */
+export function clearWarekiCache(): void {
+  cachedEras = null;
+  cachedEraMap = null;
+}
+
+/**
+ * 和暦テキストを西暦に変換（非同期・全時代対応）
+ */
+export async function wakaToSeirekiAsync(wakaText: string): Promise<number | null> {
+  const { map } = await getEraCache();
+
+  // 正規化
   const normalized = wakaText
     .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0))
     .replace(/\s/g, '');
 
-  // パターン1: "元号+数字+年" (例: "明治45年")
+  // パターン1: "元号+数字+年"
   const numericMatch = normalized.match(/^(.+?)(\d+)年?$/);
   if (numericMatch) {
     const [, eraName, yearStr] = numericMatch;
-    const era = ERA_MAP.get(eraName);
+    const era = map.get(eraName);
     if (era) {
       const eraYear = parseInt(yearStr, 10);
       return era.startYear + eraYear - 1;
     }
   }
 
-  // パターン2: "元号+元年" (例: "明治元年")
+  // パターン2: "元号+元年"
   const gannenMatch = normalized.match(/^(.+?)元年$/);
   if (gannenMatch) {
     const [, eraName] = gannenMatch;
-    const era = ERA_MAP.get(eraName);
+    const era = map.get(eraName);
     if (era) {
       return era.startYear;
     }
   }
 
-  // パターン3: 元号名のみ（開始年を返す）
-  const era = ERA_MAP.get(normalized.replace(/年$/, ''));
+  // パターン3: 元号名のみ
+  const era = map.get(normalized.replace(/年$/, ''));
+  if (era) {
+    return era.startYear;
+  }
+
+  // フォールバック: 同期版を試す
+  return wakaToSeireki(wakaText);
+}
+
+/**
+ * 西暦を和暦に変換（非同期・全時代対応）
+ */
+export async function seirekiToWakaAsync(seirekiYear: number): Promise<string | null> {
+  const era = await getWarekiByYear(seirekiYear);
+  if (!era) {
+    // フォールバック: 同期版を試す
+    return seirekiToWaka(seirekiYear);
+  }
+
+  const eraYear = seirekiYear - era.startYear + 1;
+  if (eraYear === 1) {
+    return `${era.name}元年`;
+  }
+  return `${era.name}${eraYear}年`;
+}
+
+/**
+ * 元号名から西暦範囲を取得（非同期・全時代対応）
+ */
+export async function getEraYearRangeAsync(
+  eraName: string
+): Promise<{ start: number; end: number } | null> {
+  const era = await getWarekiByName(eraName);
+  if (!era) {
+    // フォールバック: 同期版を試す
+    return getEraYearRange(eraName);
+  }
+
+  return {
+    start: era.startYear,
+    end: era.endYear ?? new Date().getFullYear(),
+  };
+}
+
+/**
+ * 元号名で検索（部分一致・非同期）
+ */
+export async function searchEraByNameAsync(query: string): Promise<WarekiEra[]> {
+  return searchWarekiByName(query);
+}
+
+// =============================================================================
+// Synchronous Functions (近代元号のみ・フォールバック用)
+// =============================================================================
+
+/**
+ * 和暦テキストを西暦に変換（同期・近代元号のみ）
+ */
+export function wakaToSeireki(wakaText: string): number | null {
+  const normalized = wakaText
+    .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0))
+    .replace(/\s/g, '');
+
+  // パターン1: "元号+数字+年"
+  const numericMatch = normalized.match(/^(.+?)(\d+)年?$/);
+  if (numericMatch) {
+    const [, eraName, yearStr] = numericMatch;
+    const era = MODERN_ERA_MAP.get(eraName);
+    if (era) {
+      const eraYear = parseInt(yearStr, 10);
+      return era.startYear + eraYear - 1;
+    }
+  }
+
+  // パターン2: "元号+元年"
+  const gannenMatch = normalized.match(/^(.+?)元年$/);
+  if (gannenMatch) {
+    const [, eraName] = gannenMatch;
+    const era = MODERN_ERA_MAP.get(eraName);
+    if (era) {
+      return era.startYear;
+    }
+  }
+
+  // パターン3: 元号名のみ
+  const era = MODERN_ERA_MAP.get(normalized.replace(/年$/, ''));
   if (era) {
     return era.startYear;
   }
@@ -111,7 +229,6 @@ export function parseWaka(wakaText: string): WakaParseResult | null {
   const seireki = wakaToSeireki(wakaText);
   if (seireki === null) return null;
 
-  // 元号を特定
   const normalized = wakaText
     .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0))
     .replace(/\s/g, '');
@@ -130,22 +247,14 @@ export function parseWaka(wakaText: string): WakaParseResult | null {
   return null;
 }
 
-// =============================================================================
-// Seireki → Waka Conversion
-// =============================================================================
-
 /**
- * 西暦を和暦に変換
- * @param seirekiYear 西暦年
- * @returns 和暦テキスト（例: "明治元年", "令和3年"）、対応外の場合は null
+ * 西暦を和暦に変換（同期・近代元号のみ）
  */
 export function seirekiToWaka(seirekiYear: number): string | null {
-  // 対応範囲外
   if (seirekiYear < MODERN_ERAS[0].startYear) {
     return null;
   }
 
-  // 該当する元号を探す（新しい順に検索）
   for (let i = MODERN_ERAS.length - 1; i >= 0; i--) {
     const era = MODERN_ERAS[i];
     if (seirekiYear >= era.startYear) {
@@ -189,40 +298,47 @@ export function isSeirekiFormat(text: string): boolean {
 }
 
 /**
- * 検索クエリから年を抽出
- * @param query 検索クエリ
- * @returns 西暦年、抽出不可の場合は null
+ * 検索クエリから年を抽出（非同期・全時代対応）
  */
-export function extractYearFromQuery(query: string): number | null {
+export async function extractYearFromQueryAsync(query: string): Promise<number | null> {
   const trimmed = query.trim();
 
-  // 西暦（3-4桁の数字）
+  // 西暦
   if (isSeirekiFormat(trimmed)) {
     return parseInt(trimmed, 10);
   }
 
-  // 和暦
-  const wakaYear = wakaToSeireki(trimmed);
-  if (wakaYear !== null) {
-    return wakaYear;
+  // 和暦（全時代対応）
+  return wakaToSeirekiAsync(trimmed);
+}
+
+/**
+ * 検索クエリから年を抽出（同期・近代元号のみ）
+ */
+export function extractYearFromQuery(query: string): number | null {
+  const trimmed = query.trim();
+
+  // 西暦
+  if (isSeirekiFormat(trimmed)) {
+    return parseInt(trimmed, 10);
   }
 
-  return null;
+  // 和暦（近代元号のみ）
+  return wakaToSeireki(trimmed);
 }
 
 /**
  * 年の範囲を検証
  */
 export function isValidYear(year: number): boolean {
-  // タイムラインの範囲: -14000 〜 2025
   return year >= -14000 && year <= 2100;
 }
 
 /**
- * 元号の開始・終了年を取得
+ * 元号の開始・終了年を取得（同期・近代元号のみ）
  */
 export function getEraYearRange(eraName: string): { start: number; end: number } | null {
-  const era = ERA_MAP.get(eraName);
+  const era = MODERN_ERA_MAP.get(eraName);
   if (!era) return null;
 
   return {
@@ -236,6 +352,14 @@ export function getEraYearRange(eraName: string): { start: number; end: number }
 // =============================================================================
 
 export default {
+  // Async (全時代対応)
+  wakaToSeirekiAsync,
+  seirekiToWakaAsync,
+  getEraYearRangeAsync,
+  searchEraByNameAsync,
+  extractYearFromQueryAsync,
+  clearWarekiCache,
+  // Sync (近代元号のみ)
   wakaToSeireki,
   seirekiToWaka,
   parseWaka,

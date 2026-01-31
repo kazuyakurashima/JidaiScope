@@ -68,3 +68,17 @@ export {
   insertReign,
   insertReigns,
 } from './ReignRepository';
+
+// Wareki Repository (元号マスター)
+export {
+  getAllWarekiEras,
+  getWarekiByName,
+  getWarekiByYear,
+  getWarekiByPeriod,
+  getWarekiCount,
+  hasWarekiData,
+  insertWarekiEra,
+  insertWarekiEras,
+  searchWarekiByName,
+} from './WarekiRepository';
+export type { WarekiEra } from './WarekiRepository';

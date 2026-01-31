@@ -22,12 +22,13 @@ import {
   getPersonsByIds,
 } from '@/data/repositories/PersonRepository';
 import {
-  extractYearFromQuery,
+  extractYearFromQueryAsync,
   isValidYear,
-  getEraYearRange,
-  MODERN_ERAS,
+  getEraYearRangeAsync,
+  searchEraByNameAsync,
 } from '@/utils/wakaCalendar';
 import { extractYearFromDate } from '@/domain/timeline/coordinateSystem';
+import { formatYear } from '@/utils/formatYear';
 
 // =============================================================================
 // Types
@@ -96,14 +97,14 @@ export async function search(query: string): Promise<SearchResult> {
     };
   }
 
-  // 年検索を試行
-  const year = extractYearFromQuery(trimmed);
+  // 年検索を試行（全時代和暦対応）
+  const year = await extractYearFromQueryAsync(trimmed);
   if (year !== null && isValidYear(year)) {
     return searchByYear(year, trimmed);
   }
 
-  // 元号名のみの場合（例: "明治"）
-  const eraRange = getEraYearRange(trimmed);
+  // 元号名のみの場合（例: "明治", "天平"）- 全時代対応
+  const eraRange = await getEraYearRangeAsync(trimmed);
   if (eraRange) {
     return searchByEraRange(eraRange.start, eraRange.end, trimmed);
   }
@@ -154,7 +155,7 @@ async function searchByYear(year: number, query: string): Promise<SearchResult> 
     query,
     totalCount: events.length + persons.length,
     searchType: 'year',
-    suggestions: items.length === 0 ? getSearchSuggestions(query) : [],
+    suggestions: items.length === 0 ? await getSearchSuggestions(query) : [],
   };
 }
 
@@ -187,7 +188,7 @@ async function searchByEraRange(
     query,
     totalCount: events.length,
     searchType: 'year',
-    suggestions: items.length === 0 ? getSearchSuggestions(query) : [],
+    suggestions: items.length === 0 ? await getSearchSuggestions(query) : [],
   };
 }
 
@@ -289,7 +290,7 @@ async function searchByName(query: string): Promise<SearchResult> {
     query,
     totalCount: items.length,
     searchType: 'name',
-    suggestions: items.length === 0 ? getSearchSuggestions(query) : [],
+    suggestions: items.length === 0 ? await getSearchSuggestions(query) : [],
   };
 }
 
@@ -334,27 +335,24 @@ function formatLifespan(person: Person): string {
   return '';
 }
 
-/**
- * 年を表示用にフォーマット（BC対応）
- */
-function formatYear(year: number): string {
-  if (year < 0) {
-    return `BC${Math.abs(year)}年`;
-  }
-  return `${year}年`;
-}
+// formatYear is now imported from @/utils/formatYear
 
 /**
- * 検索サジェストを取得
+ * 検索サジェストを取得（非同期・全時代対応）
  */
-export function getSearchSuggestions(partialQuery: string): string[] {
+export async function getSearchSuggestions(partialQuery: string): Promise<string[]> {
   const suggestions: string[] = [];
   const query = partialQuery.trim().toLowerCase();
 
-  // 元号サジェスト
-  for (const era of MODERN_ERAS) {
-    if (era.name.toLowerCase().includes(query) || era.reading.includes(query)) {
-      suggestions.push(`${era.name}元年`);
+  // 元号サジェスト（全時代対応 - DBから検索）
+  if (query.length >= 1) {
+    try {
+      const matchingEras = await searchEraByNameAsync(query);
+      for (const era of matchingEras.slice(0, 3)) {
+        suggestions.push(`${era.name}元年`);
+      }
+    } catch {
+      // DB未初期化時は無視
     }
   }
 

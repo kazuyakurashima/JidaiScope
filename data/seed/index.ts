@@ -20,6 +20,17 @@ import erasData from './eras.json';
 import eventsData from './events.json';
 import personsData from './persons.json';
 import reignsData from './reigns.json';
+import warekiErasData from './warekiEras.json';
+
+import { hasWarekiData, insertWarekiEras } from '@/data/repositories/WarekiRepository';
+import { clearWarekiCache } from '@/utils/wakaCalendar';
+
+// =============================================================================
+// Wareki Data Version
+// =============================================================================
+// Increment this when warekiEras.json content changes (new fields, fixes, etc.)
+// This triggers a full refresh of existing DBs on next app launch.
+const WAREKI_DATA_VERSION = 2; // v2: Added sequence field and fixed 建武 period
 
 // =============================================================================
 // Role Mapping: Japanese to PersonRole[]
@@ -171,7 +182,13 @@ export async function seedDatabase(): Promise<void> {
     // Seed reigns (emperors and shoguns)
     await seedReigns(db);
 
+    // Seed wareki eras (元号マスター)
+    await seedWarekiEras();
+
     await db.execAsync('COMMIT');
+
+    // Set wareki data version (after transaction to avoid nesting issues)
+    await setStoredWarekiVersion(WAREKI_DATA_VERSION);
 
     console.log('[Seed] Database seeding completed successfully');
 
@@ -426,6 +443,158 @@ async function seedReigns(db: Awaited<ReturnType<typeof getDatabase>>): Promise<
 }
 
 /**
+ * Seed wareki_eras table (元号マスター)
+ * This is called separately to support incremental seeding for existing DBs
+ */
+async function seedWarekiEras(): Promise<void> {
+  const hasData = await hasWarekiData();
+  if (hasData) {
+    console.log('[Seed] wareki_eras already has data, skipping...');
+    return;
+  }
+
+  console.log(`[Seed] Inserting ${warekiErasData.length} wareki eras...`);
+
+  const erasToInsert = warekiErasData.map((era: {
+    name: string;
+    reading: string;
+    startYear: number;
+    endYear: number;
+    period: string;
+    sequence?: number;
+  }) => ({
+    name: era.name,
+    reading: era.reading,
+    startYear: era.startYear,
+    endYear: era.endYear,
+    period: era.period,
+    sequence: era.sequence ?? 0,
+  }));
+
+  await insertWarekiEras(erasToInsert);
+
+  // Store the data version (outside transaction since seedDatabase has its own)
+  // Note: For fresh DB seeding via seedDatabase(), ensureWarekiData() will set the version
+  // This is for direct calls to seedWarekiEras() only
+
+  // Clear cache to ensure fresh data is used
+  clearWarekiCache();
+
+  console.log(`[Seed] Inserted ${warekiErasData.length} wareki eras`);
+}
+
+/**
+ * Get stored wareki data version from database
+ */
+async function getStoredWarekiVersion(): Promise<number> {
+  const db = await getDatabase();
+  try {
+    // Wareki versions are stored as negative numbers to distinguish from schema versions
+    // Use MIN() to get the most negative value (= highest version number)
+    // e.g., if -1 and -2 exist, MIN returns -2, which becomes version 2
+    const result = await db.getFirstAsync<{ version: number }>(
+      'SELECT MIN(version) as version FROM db_version WHERE version < 0'
+    );
+    return result?.version ? Math.abs(result.version) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Store wareki data version in database
+ */
+async function setStoredWarekiVersion(version: number): Promise<void> {
+  const db = await getDatabase();
+  // Store as negative number to distinguish from schema versions
+  await db.runAsync(
+    'INSERT OR REPLACE INTO db_version (version, appliedAt) VALUES (?, ?)',
+    -version,
+    new Date().toISOString()
+  );
+}
+
+/**
+ * Refresh wareki_eras data (clear and re-insert)
+ */
+async function refreshWarekiData(): Promise<void> {
+  const db = await getDatabase();
+
+  console.log('[Seed] Refreshing wareki_eras data...');
+
+  await db.withTransactionAsync(async () => {
+    // Clear existing data
+    await db.execAsync('DELETE FROM wareki_eras');
+
+    // Re-insert all data
+    const erasToInsert = warekiErasData.map((era: {
+      name: string;
+      reading: string;
+      startYear: number;
+      endYear: number;
+      period: string;
+      sequence?: number;
+    }) => ({
+      name: era.name,
+      reading: era.reading,
+      startYear: era.startYear,
+      endYear: era.endYear,
+      period: era.period,
+      sequence: era.sequence ?? 0,
+    }));
+
+    for (const era of erasToInsert) {
+      await db.runAsync(
+        `INSERT INTO wareki_eras (name, reading, startYear, endYear, period, sequence)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        era.name,
+        era.reading,
+        era.startYear,
+        era.endYear,
+        era.period,
+        era.sequence
+      );
+    }
+  });
+
+  // Update stored version
+  await setStoredWarekiVersion(WAREKI_DATA_VERSION);
+
+  // Clear cache to ensure fresh data is used
+  clearWarekiCache();
+
+  console.log(`[Seed] Refreshed ${warekiErasData.length} wareki eras (v${WAREKI_DATA_VERSION})`);
+}
+
+/**
+ * Ensure wareki_eras data exists and is up-to-date (for existing databases)
+ * This should be called from app initialization to handle:
+ * 1. DBs that were seeded before wareki_eras table was added
+ * 2. DBs that need wareki data updates (sequence fixes, period corrections, etc.)
+ */
+export async function ensureWarekiData(): Promise<void> {
+  const hasData = await hasWarekiData();
+  const storedVersion = await getStoredWarekiVersion();
+
+  // Case 1: No data exists - seed fresh
+  if (!hasData) {
+    console.log('[Seed] wareki_eras is empty, seeding...');
+    await seedWarekiEras();
+    await setStoredWarekiVersion(WAREKI_DATA_VERSION);
+    return;
+  }
+
+  // Case 2: Data exists but version is outdated - refresh
+  if (storedVersion < WAREKI_DATA_VERSION) {
+    console.log(`[Seed] wareki_eras data outdated (v${storedVersion} → v${WAREKI_DATA_VERSION}), refreshing...`);
+    await refreshWarekiData();
+    return;
+  }
+
+  // Case 3: Data exists and is current - nothing to do
+}
+
+/**
  * Get seeding statistics
  */
 export async function getSeedingStats(): Promise<{
@@ -433,14 +602,16 @@ export async function getSeedingStats(): Promise<{
   events: number;
   persons: number;
   reigns: number;
+  warekiEras: number;
 }> {
   const db = await getDatabase();
 
-  const [erasCount, eventsCount, personsCount, reignsCount] = await Promise.all([
+  const [erasCount, eventsCount, personsCount, reignsCount, warekiCount] = await Promise.all([
     db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM era'),
     db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM event'),
     db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM person'),
     db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM reign'),
+    db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM wareki_eras'),
   ]);
 
   return {
@@ -448,5 +619,6 @@ export async function getSeedingStats(): Promise<{
     events: eventsCount?.count ?? 0,
     persons: personsCount?.count ?? 0,
     reigns: reignsCount?.count ?? 0,
+    warekiEras: warekiCount?.count ?? 0,
   };
 }

@@ -28,7 +28,8 @@ import { getEventById, getEventsByIds } from '@/data/repositories/EventRepositor
 import { getEraById } from '@/data/repositories/EraRepository';
 import { getPersonsByIds } from '@/data/repositories/PersonRepository';
 import { extractYearFromDate } from '@/domain/timeline/coordinateSystem';
-import { seirekiToWaka } from '@/utils/wakaCalendar';
+import { seirekiToWakaAsync } from '@/utils/wakaCalendar';
+import { formatYear } from '@/utils/formatYear';
 import {
   TagBadge,
   PersonLink,
@@ -53,6 +54,8 @@ export default function EventDetailScreen() {
   const [relatedPersons, setRelatedPersons] = useState<Person[]>([]);
   const [relatedEvents, setRelatedEvents] = useState<HistoricalEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [startWaka, setStartWaka] = useState<string | null>(null);
+  const [endWaka, setEndWaka] = useState<string | null>(null);
 
   // データ読み込み
   useEffect(() => {
@@ -64,6 +67,8 @@ export default function EventDetailScreen() {
       setRelatedPersons([]);
       setRelatedEvents([]);
       setEraName(null);
+      setStartWaka(null);
+      setEndWaka(null);
 
       try {
         const eventData = await getEventById(id);
@@ -75,6 +80,17 @@ export default function EventDetailScreen() {
         if (eventData.eraId) {
           const era = await getEraById(eventData.eraId);
           setEraName(era?.name ?? null);
+        }
+
+        // 和暦変換（全時代対応）
+        const startYear = extractYearFromDate(eventData.startDate);
+        const startWakaText = await seirekiToWakaAsync(startYear);
+        setStartWaka(startWakaText);
+
+        if (eventData.endDate) {
+          const endYear = extractYearFromDate(eventData.endDate);
+          const endWakaText = await seirekiToWakaAsync(endYear);
+          setEndWaka(endWakaText);
         }
 
         // 関連人物を取得
@@ -116,17 +132,15 @@ export default function EventDetailScreen() {
     [router]
   );
 
-  // 日付フォーマット
-  const formatDate = (dateStr: string): { seireki: string; waka: string | null } => {
+  // 日付フォーマット（西暦表示用 - 負の年は紀元前○○年）
+  const formatSeirekiDate = (dateStr: string): string => {
     const year = extractYearFromDate(dateStr);
-    const seireki = dateStr.includes('-')
-      ? dateStr.replace(/-/g, '/')
-      : `${year}年`;
-
-    // 明治以降のみ和暦変換
-    const waka = year >= 1868 ? seirekiToWaka(year) : null;
-
-    return { seireki, waka };
+    if (dateStr.includes('-') && year >= 0) {
+      // 月日がある場合: YYYY/MM/DD 形式
+      return dateStr.replace(/-/g, '/');
+    }
+    // 年のみ or 紀元前: formatYear で統一
+    return formatYear(year);
   };
 
   // Loading
@@ -150,8 +164,8 @@ export default function EventDetailScreen() {
     );
   }
 
-  const startDate = formatDate(event.startDate);
-  const endDate = event.endDate ? formatDate(event.endDate) : null;
+  const startSeireki = formatSeirekiDate(event.startDate);
+  const endSeireki = event.endDate ? formatSeirekiDate(event.endDate) : null;
 
   return (
     <>
@@ -182,13 +196,13 @@ export default function EventDetailScreen() {
         {/* Date */}
         <View style={[styles.dateSection, { marginTop: spacing[3] }]}>
           <Text style={[styles.date, { color: colors.textSecondary }]}>
-            {startDate.seireki}
-            {endDate ? ` 〜 ${endDate.seireki}` : ''}
+            {startSeireki}
+            {endSeireki ? ` 〜 ${endSeireki}` : ''}
           </Text>
-          {(startDate.waka || endDate?.waka) && (
+          {(startWaka || endWaka) && (
             <Text style={[styles.dateWaka, { color: colors.textTertiary, marginTop: spacing[1] }]}>
-              {startDate.waka ?? ''}
-              {endDate?.waka ? ` 〜 ${endDate.waka}` : ''}
+              {startWaka ?? ''}
+              {endWaka ? ` 〜 ${endWaka}` : ''}
             </Text>
           )}
         </View>

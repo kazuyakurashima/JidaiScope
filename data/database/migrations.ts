@@ -7,7 +7,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { getDatabase } from './connection';
 
-const CURRENT_VERSION = 2;
+const CURRENT_VERSION = 4;
 
 /**
  * マイグレーション定義
@@ -125,6 +125,34 @@ const migrations: Record<number, string[]> = {
 
     // インデックス再作成
     `CREATE INDEX IF NOT EXISTS idx_bookmark_target ON bookmark(targetType, targetId)`,
+  ],
+
+  // Version 3: 元号マスターテーブル（和暦 SSOT）
+  3: [
+    // wareki_eras テーブル - 全時代の元号データ（大化645年〜令和）
+    `CREATE TABLE IF NOT EXISTS wareki_eras (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      reading TEXT,
+      startYear INTEGER NOT NULL,
+      endYear INTEGER,
+      period TEXT
+    )`,
+
+    // インデックス作成
+    `CREATE INDEX IF NOT EXISTS idx_wareki_name ON wareki_eras(name)`,
+    `CREATE INDEX IF NOT EXISTS idx_wareki_year ON wareki_eras(startYear, endYear)`,
+    `CREATE INDEX IF NOT EXISTS idx_wareki_period ON wareki_eras(period)`,
+  ],
+
+  // Version 4: wareki_eras に sequence 追加（同一年内の改元順序）
+  4: [
+    // sequence 列を追加（同一 startYear 内での順序、大きいほど後の元号）
+    // デフォルト値 0 で既存データとの互換性を確保
+    `ALTER TABLE wareki_eras ADD COLUMN sequence INTEGER DEFAULT 0`,
+
+    // インデックス更新（年+順序での検索用）
+    `CREATE INDEX IF NOT EXISTS idx_wareki_year_seq ON wareki_eras(startYear, sequence)`,
   ],
 };
 

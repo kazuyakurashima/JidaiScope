@@ -11,14 +11,8 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { getDatabase } from '@/data/database';
 import { useTheme } from '@/hooks/useTheme';
 import { extractYearFromDate } from '@/domain/timeline/coordinateSystem';
+import { formatYear, formatYearRange } from '@/utils/formatYear';
 import type { Era, EraRow, HistoricalEvent, EventRow, EventTag, ImportanceLevel, EventSource } from '@/types/database';
-
-function formatYear(year: number): string {
-  if (year < 0) {
-    return `BC ${Math.abs(year)}`;
-  }
-  return `${year}`;
-}
 
 function convertEventRow(row: EventRow): HistoricalEvent {
   return {
@@ -106,9 +100,7 @@ export default function EraDetailScreen() {
     );
   }
 
-  const yearRange = era.startYear < 0
-    ? `BC ${Math.abs(era.startYear)} - ${era.endYear < 0 ? `BC ${Math.abs(era.endYear)}` : `AD ${era.endYear}`}`
-    : `${era.startYear} - ${era.endYear}`;
+  const yearRange = formatYearRange(era.startYear, era.endYear);
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.bg }]}>

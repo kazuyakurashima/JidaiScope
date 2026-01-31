@@ -27,6 +27,7 @@ import {
   getMinScrollX,
 } from '@/domain/timeline/coordinateSystem';
 import { triggerHaptic } from '@/utils/haptics';
+import { formatYearShort } from '@/utils/formatYear';
 
 // =============================================================================
 // Types
@@ -235,7 +236,7 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
                 ]}
                 numberOfLines={1}
               >
-                {formatYear(era.startYear)}
+                {formatYearShort(era.startYear)}
               </Text>
             </Pressable>
           );
@@ -245,20 +246,7 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
   );
 }
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
-/**
- * 年号を表示用にフォーマット
- * 負の年は「BC xxxx」形式に
- */
-function formatYear(year: number): string {
-  if (year < 0) {
-    return `BC ${Math.abs(year)}`;
-  }
-  return `${year}`;
-}
+// formatYearShort is now imported from @/utils/formatYear
 
 // =============================================================================
 // Styles

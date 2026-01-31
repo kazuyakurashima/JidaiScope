@@ -26,7 +26,8 @@ import { useAppStore } from '@/stores/appStore';
 import { useBookmarkStore } from '@/stores/bookmarkStore';
 import { getPersonById } from '@/data/repositories/PersonRepository';
 import { getEventsByPersonId } from '@/data/repositories/EventRepository';
-import { seirekiToWaka } from '@/utils/wakaCalendar';
+import { seirekiToWakaAsync } from '@/utils/wakaCalendar';
+import { formatYear } from '@/utils/formatYear';
 import { EventLink, BookmarkButton } from '@/components/cards';
 
 // =============================================================================
@@ -57,6 +58,7 @@ export default function PersonDetailScreen() {
   const [person, setPerson] = useState<Person | null>(null);
   const [relatedEvents, setRelatedEvents] = useState<HistoricalEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [lifespanDisplay, setLifespanDisplay] = useState<string | null>(null);
 
   // データ読み込み
   useEffect(() => {
@@ -66,12 +68,35 @@ export default function PersonDetailScreen() {
       setIsLoading(true);
       // 関連データを初期化（人物切替時の残表示を防止）
       setRelatedEvents([]);
+      setLifespanDisplay(null);
 
       try {
         const personData = await getPersonById(id);
         setPerson(personData);
 
         if (!personData) return;
+
+        // 生没年の和暦変換（全時代対応 - 負の年は紀元前○○年）
+        if (personData.birthYear || personData.deathYear) {
+          const formatYearWithWaka = async (year: number): Promise<string> => {
+            const waka = await seirekiToWakaAsync(year);
+            const yearStr = formatYear(year);
+            return waka ? `${yearStr} (${waka})` : yearStr;
+          };
+
+          let lifespan: string;
+          if (personData.birthYear && personData.deathYear) {
+            const birthStr = await formatYearWithWaka(personData.birthYear);
+            const deathStr = await formatYearWithWaka(personData.deathYear);
+            lifespan = `${birthStr} 〜 ${deathStr}`;
+          } else if (personData.birthYear) {
+            lifespan = await formatYearWithWaka(personData.birthYear);
+          } else {
+            const deathStr = await formatYearWithWaka(personData.deathYear!);
+            lifespan = `〜${deathStr}`;
+          }
+          setLifespanDisplay(lifespan);
+        }
 
         // 関連イベントを取得
         const events = await getEventsByPersonId(id);
@@ -96,25 +121,6 @@ export default function PersonDetailScreen() {
     },
     [router]
   );
-
-  // 生没年フォーマット（データがある場合のみ表示）
-  const formatLifespan = (): string | null => {
-    if (!person?.birthYear && !person?.deathYear) return null;
-
-    const formatYear = (year: number): string =>
-      `${year}年${year >= 1868 ? ` (${seirekiToWaka(year)})` : ''}`;
-
-    // birth のみ
-    if (person.birthYear && !person.deathYear) {
-      return formatYear(person.birthYear);
-    }
-    // death のみ
-    if (!person.birthYear && person.deathYear) {
-      return `〜${formatYear(person.deathYear)}`;
-    }
-    // 両方あり
-    return `${formatYear(person.birthYear!)} 〜 ${formatYear(person.deathYear!)}`;
-  };
 
   // 活動期間フォーマット
   const formatActivePeriod = (): string | null => {
@@ -147,7 +153,6 @@ export default function PersonDetailScreen() {
     );
   }
 
-  const lifespan = formatLifespan();
   const activePeriod = formatActivePeriod();
 
   return (
@@ -192,13 +197,13 @@ export default function PersonDetailScreen() {
         </View>
 
         {/* Lifespan - データがある場合のみ表示 */}
-        {lifespan && (
+        {lifespanDisplay && (
           <View style={[styles.section, { marginTop: spacing[4] }]}>
             <Text style={[styles.sectionTitle, { color: colors.text, fontSize: typography.size.base }]}>
               生没年
             </Text>
             <Text style={[styles.sectionContent, { color: colors.textSecondary, marginTop: spacing[2] }]}>
-              {lifespan}
+              {lifespanDisplay}
             </Text>
           </View>
         )}

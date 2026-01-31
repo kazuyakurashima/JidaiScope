@@ -9,12 +9,14 @@
 - 時代名ラベルの視認性向上
 - LODレベルに応じた目盛り粒度調整
 - 年代表記の統一（既存の不整合修正含む）
+- **全時代和暦対応**（大化〜令和）← v4.0追加
 
 **成功基準:**
 - [ ] タイムライン軸に年代目盛りが表示される
 - [ ] LODレベルに応じて目盛り間隔が変化する
 - [ ] 時代名が適切に表示され、重ならない
 - [ ] 年代表記が「紀元前○○年」形式で統一されている（※スペース制約のある箇所は「年」省略可）
+- [ ] **L3で和暦表示（全時代対応: 大化645年〜令和）**
 
 ---
 
@@ -38,6 +40,8 @@ So that 歴史的な時間軸を把握しながら探索できる
 | 4 | L0-L1: 画面中央の年を含む時代のみラベル表示 | UI確認 |
 | 5 | L2-L3: 幅60px以上の時代のみラベル表示 | UI確認 |
 | 6 | 既存の BC 表記が「紀元前」に統一されている | grep検証（`app/`, `components/`, `domain/`, `utils/` のみ対象、`docs/` 除外） |
+| 7 | **L3で和暦表示（全時代: 大化645年〜令和対応）** | 各時代でUI確認 |
+| 8 | **検索で和暦入力対応（「大化」「天平」など古代・中世も）** | 検索テスト |
 
 ---
 
@@ -45,9 +49,9 @@ So that 歴史的な時間軸を把握しながら探索できる
 
 | 種類 | 詳細 |
 |------|------|
-| ✓ 入力依存 | 020 (Timeline Core), 022 (LOD Manager) |
+| ✓ 入力依存 | 020 (Timeline Core), 022 (LOD Manager), 013 (Data Preparation - 元号マスター) |
 | ✗ コード依存 | なし |
-| ✗ 他チケット依存 | なし |
+| ⓘ データ共有 | 030 (Search) と元号マスターデータを共有 |
 
 ---
 
@@ -126,6 +130,89 @@ export function formatYearRange(startYear: number, endYear: number): string {
   return `${formatYear(startYear)} - ${formatYear(endYear)}`;
 }
 ```
+
+### 2.5 全時代和暦データ（v4.0追加）
+
+**データソース方針（v4.1 明確化）:**
+- 元号マスターデータは **013 Data Preparation** で SQLite DB に格納
+- `utils/wakaCalendar.ts` は DB の元号テーブルを参照
+- 030 Search Feature と本チケットで同一データソースを共有
+- ハードコードは避け、DB を Single Source of Truth (SSOT) とする
+
+```typescript
+// utils/wakaCalendar.ts
+
+import { getWarekiEras } from '@/data/repositories/WarekiRepository';
+
+export interface WarekiEra {
+  name: string;
+  startYear: number;
+  endYear: number;
+}
+
+// DB から元号マスターを取得（キャッシュ付き）
+let cachedEras: WarekiEra[] | null = null;
+
+async function getEras(): Promise<WarekiEra[]> {
+  if (cachedEras) return cachedEras;
+  cachedEras = await getWarekiEras(); // DB から取得
+  return cachedEras;
+}
+
+/**
+ * 西暦から和暦を取得
+ * @param year 西暦
+ * @returns 和暦情報 or null
+ */
+export async function toWareki(year: number): Promise<{ era: string; year: number } | null> {
+  const eras = await getEras();
+  const era = eras.find((e) => year >= e.startYear && year < e.endYear);
+  if (!era) return null;
+
+  return {
+    era: era.name,
+    year: year - era.startYear + 1,
+  };
+}
+
+/**
+ * 和暦名から西暦範囲を取得（検索用）
+ * @param eraName 元号名（例: "大化", "天平"）
+ * @returns { startYear, endYear } or null
+ */
+export async function fromWarekiName(eraName: string): Promise<{ startYear: number; endYear: number } | null> {
+  const eras = await getEras();
+  const era = eras.find((e) => e.name === eraName);
+  if (!era) return null;
+
+  return {
+    startYear: era.startYear,
+    endYear: era.endYear,
+  };
+}
+```
+
+**DB スキーマ（013 で定義）:**
+```sql
+CREATE TABLE wareki_eras (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,           -- 元号名（例: "大化", "令和"）
+  reading TEXT,                 -- 読み仮名
+  startYear INTEGER NOT NULL,   -- 開始年（西暦）
+  endYear INTEGER,              -- 終了年（西暦）※令和など現行元号はNULL
+  period TEXT,                  -- 時代区分（飛鳥, 奈良, 平安, 南北朝-南朝, 南北朝-北朝, 等）
+  sequence INTEGER DEFAULT 0    -- 同一年内の順序（大きいほど後の元号）
+);
+
+-- 約250件の元号データを挿入
+-- 南北朝時代は北朝・南朝両方を収録し、period と sequence で区別
+-- sequence: 南朝=0, 北朝=1 → getWarekiByYear は北朝を優先
+```
+
+**年単位変換の制約（MVP）:**
+- `getWarekiByYear(year)` は年単位で元号を判定
+- 年内に改元がある年（例: 749年の天平感宝→天平勝宝）は `sequence DESC` で後の元号を返す
+- 日付精度での判定は MVP スコープ外（将来の `getWarekiByDate` で対応予定）
 
 ### 3. Era ラベル衝突回避
 
@@ -210,7 +297,23 @@ components/timeline/
 ---
 
 **作成日:** 2025-01-30
-**優先度:** P1
-**推定工数:** 1d
-**ステータス:** Pending
-**ブロッカー:** 020 (Timeline Core)
+**更新日:** 2026-01-31
+**優先度:** P0（P1から昇格）
+**推定工数:** 1.5d（全時代和暦対応を含む）
+**ステータス:** Not Started
+**ブロッカー:** 020 (Timeline Core) ✅
+
+---
+
+## 変更履歴
+
+### v4.1 (2026-01-31)
+- 和暦データソースを明確化: DB (013 Data Preparation) を SSOT とする
+- 依存関係に 013 を追加、030 Search Feature とのデータ共有を明記
+- ハードコードから DB 参照方式に設計変更
+
+### v4.0 (2026-01-31)
+- 全時代和暦対応を追加（大化645年〜令和）
+- 優先度を P1 → P0 に昇格
+- 工数を 1d → 1.5d に修正（和暦データ準備含む）
+- 受け入れ条件 #7, #8 を追加

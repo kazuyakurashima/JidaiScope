@@ -38,7 +38,7 @@ So that 受験勉強の効率が上がる
 | #   | 条件                                               | 検証方法                         | 担当 |
 | --- | -------------------------------------------------- | -------------------------------- | ---- |
 | 1   | 西暦数値で検索 → 該当年のイベント一覧              | 「1868」で明治関連イベント       | -    |
-| 2   | 和暦で検索 → 変換して検索（MVP: 明治〜令和のみ）   | 「明治元年」で「1868」と同じ結果 | -    |
+| 2   | 和暦で検索 → 全時代対応（大化645年〜令和）         | 「明治元年」で「1868」と同じ結果 | -    |
 | 3   | 人物名で検索 → 人物と関連イベント                  | 「織田信長」で人物と戦国イベント | -    |
 | 4   | 事件名で検索 → 事件と関連人物                      | 「本能寺」で事件と信長・光秀     | -    |
 | 5   | 検索結果クリック → タイムラインジャンプ + 詳細表示 | ナビゲーション確認               | -    |
@@ -69,14 +69,16 @@ So that 受験勉強の効率が上がる
 
 - [x] 和暦マッピングテーブル作成（utils/wakaCalendar.ts）
   ```
+  "大化元年" → 645
   "明治元年" → 1868
   "令和3年" → 2021
   等
   ```
 - [x] パーサー実装（wakaToSeireki, parseWaka）
-- [x] **MVP スコープ:** 明治〜令和（5元号）のみ対応
-  - 明治（1868-1912）、大正（1912-1926）、昭和（1926-1989）、平成（1989-2019）、令和（2019-）
-  - 古い元号（慶応以前）は v1.1 で対応予定
+- [x] **全時代対応（大化〜令和）**
+  - 日本史上のすべての元号（約250元号）に対応
+  - 元号マスターデータは 013 Data Preparation で整備
+  - 南北朝時代（北朝・南朝）の元号も対応
 
 ### Phase 3: インクリメンタルサーチUI
 
@@ -172,29 +174,37 @@ export function SearchBar() {
 }
 
 // utils/wakaCalendar.ts
-// MVP スコープ: 明治〜令和（5元号）のみ対応
-// v1.1 で慶応以前の元号を追加予定
+// 全時代対応（大化645年〜令和）
+// 元号マスターデータはDBから動的に取得
 export function wakaToSeireki(wakaText: string): number | null {
-  // MVP: 明治〜令和の5元号
-  const patterns = [
-    { regex: /明治(\d+)年/, baseYear: 1868, adjustment: -1 },
-    { regex: /大正(\d+)年/, baseYear: 1912, adjustment: -1 },
-    { regex: /昭和(\d+)年/, baseYear: 1926, adjustment: -1 },
-    { regex: /平成(\d+)年/, baseYear: 1989, adjustment: -1 },
-    { regex: /令和(\d+)年/, baseYear: 2019, adjustment: -1 },
-  ];
+  // 元号マスター（DBから取得、ここでは簡略化）
+  // 約250元号すべてに対応
+  const eraPatterns = getEraPatterns(); // DBから取得
 
-  for (const { regex, baseYear, adjustment } of patterns) {
+  for (const { eraName, startYear } of eraPatterns) {
+    const regex = new RegExp(`${eraName}(\\d+)年`);
     const match = wakaText.match(regex);
     if (match) {
-      return baseYear + parseInt(match[1]) + adjustment;
+      const eraYear = parseInt(match[1]);
+      return startYear + eraYear - 1;
     }
   }
 
-  // v1.1: 慶応以前の元号対応（江戸時代以前は元号が複雑）
-  // TODO: 元号テーブルをDBに追加し、動的にマッチング
+  // 元号名のみ（年なし）で検索した場合は開始年を返す
+  for (const { eraName, startYear } of eraPatterns) {
+    if (wakaText.includes(eraName)) {
+      return startYear;
+    }
+  }
+
   return null;
 }
+
+// 例:
+// "大化元年" → 645
+// "天平勝宝8年" → 756
+// "慶応3年" → 1867
+// "明治元年" → 1868
 ```
 
 ---
@@ -241,7 +251,17 @@ app/
 ---
 
 **作成日:** 2025-01-25
+**更新日:** 2026-01-31
 **優先度:** P0
 **推定工数:** 2d
 **ステータス:** Done (Phase 1-6 実装完了、Phase 7 実機テスト待ち)
 **ブロッカー:** 012, 014, 020 完了 ✓
+
+---
+
+## 変更履歴
+
+### v1.1 (2026-01-31)
+- 和暦対応を「明治〜令和」→「全時代（大化645年〜令和）」に拡張
+- 約250元号すべてに対応する設計に変更
+- 元号マスターデータはDB（013 Data Preparation）から取得する方式に更新

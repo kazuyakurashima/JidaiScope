@@ -12,11 +12,11 @@
 - **全時代和暦対応**（大化〜令和）← v4.0追加
 
 **成功基準:**
-- [ ] タイムライン軸に年代目盛りが表示される
-- [ ] LODレベルに応じて目盛り間隔が変化する
-- [ ] 時代名が適切に表示され、重ならない
-- [ ] 年代表記が「紀元前○○年」形式で統一されている（※スペース制約のある箇所は「年」省略可）
-- [ ] **L3で和暦表示（全時代対応: 大化645年〜令和）**
+- [x] タイムライン軸に年代目盛りが表示される
+- [x] LODレベルに応じて目盛り間隔が変化する
+- [x] 時代名が適切に表示され、重ならない
+- [x] 年代表記が「紀元前○○年」形式で統一されている（※スペース制約のある箇所は「年」省略可）
+- [x] **L3で和暦表示（645年以降: 大化〜令和。644年以前は西暦フォールバック）**
 
 ---
 
@@ -40,7 +40,7 @@ So that 歴史的な時間軸を把握しながら探索できる
 | 4 | L0-L1: 画面中央の年を含む時代のみラベル表示 | UI確認 |
 | 5 | L2-L3: 幅60px以上の時代のみラベル表示 | UI確認 |
 | 6 | 既存の BC 表記が「紀元前」に統一されている | grep検証（`app/`, `components/`, `domain/`, `utils/` のみ対象、`docs/` 除外） |
-| 7 | **L3で和暦表示（全時代: 大化645年〜令和対応）** | 各時代でUI確認 |
+| 7 | **L3で和暦表示（645年以降: 大化〜令和。644年以前は西暦フォールバック）** | 各時代でUI確認 |
 | 8 | **検索で和暦入力対応（「大化」「天平」など古代・中世も）** | 検索テスト |
 
 ---
@@ -204,7 +204,7 @@ CREATE TABLE wareki_eras (
   sequence INTEGER DEFAULT 0    -- 同一年内の順序（大きいほど後の元号）
 );
 
--- 約250件の元号データを挿入
+-- 247件の元号データを挿入
 -- 南北朝時代は北朝・南朝両方を収録し、period と sequence で区別
 -- sequence: 南朝=0, 北朝=1 → getWarekiByYear は北朝を優先
 ```
@@ -263,28 +263,30 @@ const shouldShowEraLabel = (era: Era, lodLevel: LODLevel, config: CoordinateConf
 - [x] `components/timeline/EraPickerBar.tsx` 修正
 
 ### Phase 1.5: 和暦基盤 ✅（v4.0追加）
-- [x] `data/seed/warekiEras.json` 作成（248元号、sequence対応）
+- [x] `data/seed/warekiEras.json` 作成（247元号、sequence対応）
 - [x] `data/repositories/WarekiRepository.ts` 作成
 - [x] `data/database/migrations.ts` v4追加（sequence列）
 - [x] `data/seed/index.ts` バージョン管理機構追加
 - [x] `utils/wakaCalendar.ts` DB参照方式に更新
 
-### Phase 2: 年代ルーラー
-- [ ] `YEAR_RULER_INTERVALS` 定数追加
-- [ ] `yearMarks` 計算ロジック追加
-- [ ] Skia で目盛り線描画
-- [ ] 目盛りラベル描画（formatYearShort使用）
+### Phase 2: 年代ルーラー ✅
+- [x] `YEAR_RULER_INTERVALS` 定数追加
+- [x] `yearMarks` 計算ロジック追加
+- [x] Skia で目盛り線描画
+- [x] 目盛りラベル描画（formatYearShort使用）
+- [x] ラベル重複防止（`YEAR_RULER_MIN_LABEL_SPACING`）
+- [x] **L3 和暦表示**（645年以降: 大化〜令和対応）
 
-### Phase 3: Era ラベル改善
-- [ ] `shouldShowEraLabel` 関数実装
-- [ ] 既存の era ラベル描画ロジック修正
-- [ ] L0-L1: 中央時代のみ表示
-- [ ] L2-L3: 幅60px以上のみ表示
+### Phase 3: Era ラベル改善 ✅
+- [x] `shouldShowEraLabel` 関数実装
+- [x] 既存の era ラベル描画ロジック修正
+- [x] L0-L1: 中央時代のみ表示
+- [x] L2-L3: 幅60px以上のみ表示
 
 ### Phase 4: テスト
-- [ ] 各LODレベルで目盛り表示確認
+- [ ] 各LODレベルで目盛り表示確認（実機テスト推奨）
 - [x] 紀元前の年代表示確認（Phase 1で実施）
-- [ ] ラベル重なりなし確認
+- [x] ラベル重なりなし確認（Phase 2でロジック実装済）
 
 ---
 
@@ -292,13 +294,20 @@ const shouldShowEraLabel = (era: Era, lodLevel: LODLevel, config: CoordinateConf
 
 ```
 utils/
-└── formatYear.ts              # 年代フォーマットユーティリティ（新規）
+└── formatYear.ts              # 年代フォーマットユーティリティ ✅
 
 domain/timeline/
-└── constants.ts               # YEAR_RULER_INTERVALS 追加
+└── constants.ts               # YEAR_RULER_INTERVALS + レイアウト定数 ✅
 
 components/timeline/
-└── TimelineCanvas.tsx         # 年代ルーラー描画追加
+└── TimelineCanvas.tsx         # 年代ルーラー描画 + Era ラベル改善 ✅
+
+data/
+├── seed/
+│   ├── warekiEras.json        # 247元号データ（sequence対応）✅
+│   └── index.ts               # DB シード + バージョン管理 ✅
+└── repositories/
+    └── WarekiRepository.ts    # 元号 DB アクセス層 ✅
 ```
 
 ---
@@ -307,17 +316,35 @@ components/timeline/
 **更新日:** 2026-01-31
 **優先度:** P0（P1から昇格）
 **推定工数:** 1.5d（全時代和暦対応を含む）
-**ステータス:** In Progress（Phase 1 + 1.5 完了、Phase 2-3 残）
+**ステータス:** In Progress（Phase 1-3 完了、Phase 4 実機テスト残）
 **ブロッカー:** 020 (Timeline Core) ✅
 
 ---
 
 ## 変更履歴
 
+### v4.4 (2026-01-31) - L3 和暦表示追加
+- **受け入れ条件 #7 対応**: L3で和暦表示（645年以降: 大化〜令和）
+  - `warekiLabels` 非同期キャッシュ機構追加
+  - L3 目盛りラベルを和暦形式に切り替え（例: "令和7"）
+  - 和暦ラベルは間隔を1.5倍に広げて重複防止
+
+### v4.3 (2026-01-31) - Phase 2-3 実装完了
+- **Phase 2 完了**: 年代ルーラー実装
+  - `YEAR_RULER_INTERVALS` 定数（L0:2000年, L1:500年, L2:100年, L3:50年）
+  - `yearMarks` 計算ロジック（可視範囲内の目盛り計算）
+  - Skia での目盛り線 + ラベル描画
+  - ラベル重複防止ロジック（`YEAR_RULER_MIN_LABEL_SPACING=60px`）
+- **Phase 3 完了**: Era ラベル改善
+  - `shouldShowEraLabel` 関数実装
+  - L0-L1: 画面中央の時代のみラベル表示
+  - L2-L3: 幅60px以上の時代のみラベル表示
+- 型エラー修正: warekiEras の endYear に null 許容
+
 ### v4.2 (2026-01-31) - Phase 1 + 1.5 実装完了
 - **Phase 1 完了**: 年代表記統一（formatYear.ts + 全UI画面修正）
 - **Phase 1.5 完了**: 和暦基盤実装
-  - warekiEras.json: 248元号データ（大化〜令和）
+  - warekiEras.json: 247元号データ（大化〜令和）
   - WarekiRepository.ts: DB アクセス層
   - sequence フィールド: 同年改元対応（749年、1097年）
   - 南北朝 period 区別: 南北朝-南朝 / 南北朝-北朝

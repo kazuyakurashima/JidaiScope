@@ -14,10 +14,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { initializeDatabase } from '@/data/database';
-import { isDatabaseSeeded, seedDatabase } from '@/data/seed';
+import { isDatabaseSeeded, seedDatabase, ensureWarekiData } from '@/data/seed';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore } from '@/stores';
 import { useBookmarkStore } from '@/stores/bookmarkStore';
+import { useOnboardingStore } from '@/stores/onboardingStore';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -27,6 +28,7 @@ export default function RootLayout() {
   const { colors, isDark } = useTheme();
   const setDbReady = useAppStore((state) => state.setDbReady);
   const loadBookmarks = useBookmarkStore((state) => state.loadBookmarks);
+  const checkOnboardingCompleted = useOnboardingStore((state) => state.checkCompleted);
 
   // データベース初期化とシーディング（アプリ起動時に一度だけ実行）
   useEffect(() => {
@@ -42,10 +44,13 @@ export default function RootLayout() {
           await seedDatabase();
         }
 
-        // 3. 準備完了
+        // 3. 既存DBの場合、wareki_erasデータを補完（DB v3で追加されたテーブル）
+        await ensureWarekiData();
+
+        // 4. 準備完了
         setDbReady(true);
 
-        // 4. ブックマーク読み込み（詳細画面で即座に使えるよう）
+        // 5. ブックマーク読み込み（詳細画面で即座に使えるよう）
         await loadBookmarks();
       } catch (error) {
         console.error('Database initialization failed:', error);
@@ -54,6 +59,11 @@ export default function RootLayout() {
 
     initDb();
   }, [setDbReady, loadBookmarks]);
+
+  // オンボーディング完了状態をチェック（初回起動判定）
+  useEffect(() => {
+    checkOnboardingCompleted();
+  }, [checkOnboardingCompleted]);
 
   // React Navigation テーマをカスタムカラーで構築
   const navigationTheme = useMemo(() => ({

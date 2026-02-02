@@ -2,28 +2,29 @@
  * formatYear.ts - 年代フォーマットユーティリティ
  * Sprint 3: 036 Year Ruler & Era Labels
  *
- * 紀元前表記を統一するためのヘルパー関数
+ * 紀元前表記: MVP では BC 表記（Skia の Roboto フォントが日本語非対応のため）
+ * TODO: Sprint 4 で日本語フォント対応後に「紀元前」に変更
  */
 
 /**
- * 年を「○○年」形式でフォーマット
- * 負の年は「紀元前○○年」
+ * 年をフォーマット
+ * 負の年は「BC ○○」
  */
 export function formatYear(year: number): string {
   if (year < 0) {
-    return `紀元前${Math.abs(year)}年`;
+    return `BC ${Math.abs(year)}`;
   }
-  return `${year}年`;
+  return `${year}`;
 }
 
 /**
- * 年を「○○」形式でフォーマット（「年」なし）
- * 負の年は「紀元前○○」
- * EraPickerBar などスペースが限られる箇所向け
+ * 年を短い形式でフォーマット
+ * 負の年は「BC ○○」
+ * TimelineCanvas の Year Ruler 向け（Roboto フォント使用）
  */
 export function formatYearShort(year: number): string {
   if (year < 0) {
-    return `紀元前${Math.abs(year)}`;
+    return `BC ${Math.abs(year)}`;
   }
   return `${year}`;
 }

@@ -1,33 +1,26 @@
 /**
  * Era Picker Bar - 時代ジャンプナビゲーション
- * Sprint 2: 023 Era Picker
+ * Sprint 3: 038 EraPickerBar Redesign
  *
- * 時代を横並びに表示し、タップで該当時代へジャンプするUI。
- * 各時代の幅は期間に比例（真比率）。
+ * 2層構造:
+ * - 上段: 可変幅チップ行（時代名の長さに応じた幅）
+ * - 下段: 真比率ミニマップ（現在位置インジケーター）
  */
 
-import { useCallback, useEffect, useRef, useMemo } from 'react';
-import {
-  ScrollView,
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-} from 'react-native';
+import { useCallback, useMemo, useRef, useEffect } from 'react';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 
 import type { Era } from '@/types/database';
 import { useTheme } from '@/hooks/useTheme';
 import { useTimelineStore } from '@/stores/timelineStore';
 import {
   TIMELINE_START_YEAR,
-  TOTAL_YEARS,
   getPixelsPerYear,
   clampScrollX,
-  getMinScrollX,
 } from '@/domain/timeline/coordinateSystem';
 import { triggerHaptic } from '@/utils/haptics';
-import { formatYearShort } from '@/utils/formatYear';
+import { EraChipRow } from './EraChipRow';
+import { MiniMap } from './MiniMap';
 
 // =============================================================================
 // Types
@@ -42,14 +35,8 @@ interface EraPickerBarProps {
 // Constants
 // =============================================================================
 
-/** バーの最小幅（px）- 短い時代でも最低限の幅を確保 */
-const MIN_ERA_WIDTH = 40;
-
 /** ジャンプアニメーション時間（ms） */
 const JUMP_ANIMATION_DURATION = 400;
-
-/** Era Picker の高さ */
-const PICKER_HEIGHT = 48;
 
 // =============================================================================
 // Component
@@ -57,7 +44,7 @@ const PICKER_HEIGHT = 48;
 
 export function EraPickerBar({ eras }: EraPickerBarProps) {
   const { width: screenWidth } = useWindowDimensions();
-  const { colors, typography } = useTheme();
+  const { colors } = useTheme();
 
   // Timeline store
   const scrollX = useTimelineStore((s) => s.scrollX);
@@ -81,17 +68,16 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
     return globalThis.performance?.now?.() ?? Date.now();
   }, []);
 
-  // Calculate which era is currently visible (center of screen)
-  // For overlapping eras (e.g., Muromachi 1336-1573 & Sengoku 1467-1590),
-  // select the one with the shortest duration (more specific era)
+  // 現在の時代を計算（画面中央の年を含む時代）
+  // 重複時代（例: 室町 1336-1573 & 戦国 1467-1590）の場合、
+  // 最も短い時代（より具体的な時代）を優先
   const currentEraId = useMemo(() => {
     const pixelsPerYear = getPixelsPerYear(screenWidth, zoomLevel);
-    // Center of screen's year
     const centerPixelX = screenWidth / 2;
     const yearOffset = (centerPixelX - scrollX) / pixelsPerYear;
     const centerYear = yearOffset + TIMELINE_START_YEAR;
 
-    // Find all eras containing this year
+    // この年を含む全ての時代を検索
     const matchingEras = eras.filter(
       (e) => centerYear >= e.startYear && centerYear < e.endYear
     );
@@ -100,7 +86,7 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
       return null;
     }
 
-    // Sort by duration (shortest first) to prioritize more specific eras
+    // 期間でソート（短い順）して最も具体的な時代を選択
     matchingEras.sort(
       (a, b) => (a.endYear - a.startYear) - (b.endYear - b.startYear)
     );
@@ -108,29 +94,20 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
     return matchingEras[0].id;
   }, [eras, scrollX, zoomLevel, screenWidth]);
 
-  // Jump to era with animation
-  const jumpToEra = useCallback(
+  // 時代タップ時のジャンプ処理（スムーズアニメーション）
+  const handleEraPress = useCallback(
     (era: Era) => {
-      try {
-        console.log('[EraPickerBar] Jump to era:', era.name);
-        // Trigger haptic feedback (fire-and-forget, don't await)
-        void triggerHaptic('selection');
+      void triggerHaptic('selection');
 
-        // Cancel any ongoing animation
-        if (animationRef.current !== null) {
-          cancelAnimationFrame(animationRef.current);
-          animationRef.current = null;
-        }
+      // Cancel any ongoing animation
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
 
-        const pixelsPerYear = getPixelsPerYear(screenWidth, zoomLevel);
-
-      // Calculate target scrollX to position era's start at left edge with some padding
-      const targetYear = era.startYear;
-      const targetScrollX = -((targetYear - TIMELINE_START_YEAR) * pixelsPerYear);
-
-      // Clamp to valid scroll bounds
+      const pixelsPerYear = getPixelsPerYear(screenWidth, zoomLevel);
+      const targetScrollX = -((era.startYear - TIMELINE_START_YEAR) * pixelsPerYear);
       const clampedTarget = clampScrollX(targetScrollX, screenWidth, zoomLevel);
-      const minScrollX = getMinScrollX(screenWidth, zoomLevel);
 
       // If already at target, do nothing
       if (Math.abs(scrollX - clampedTarget) < 1) {
@@ -149,7 +126,7 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
         const eased = 1 - Math.pow(1 - progress, 3);
 
         const newScrollX = startScrollX + (clampedTarget - startScrollX) * eased;
-        setScroll(Math.max(minScrollX, Math.min(0, newScrollX)));
+        setScroll(newScrollX);
 
         if (progress < 1) {
           animationRef.current = requestAnimationFrame(animate);
@@ -159,94 +136,80 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
       };
 
       animationRef.current = requestAnimationFrame(animate);
-      } catch (error) {
-        console.error('[EraPickerBar] Jump error:', error);
-      }
     },
     [screenWidth, zoomLevel, scrollX, setScroll, getNow]
   );
 
-  // Calculate era widths based on duration proportion
-  const eraWidths = useMemo(() => {
-    // Calculate total width for the bar (use screen width as reference)
-    // We use a fixed reference width rather than zoom-dependent width
-    const totalBarWidth = screenWidth * 2; // Allow horizontal scrolling
+  // ミニマップタップ時のジャンプ処理（スムーズアニメーション）
+  const handlePositionPress = useCallback(
+    (targetYear: number) => {
+      void triggerHaptic('light');
 
-    return eras.map((era) => {
-      const duration = era.endYear - era.startYear;
-      const proportion = duration / TOTAL_YEARS;
-      const width = Math.max(MIN_ERA_WIDTH, proportion * totalBarWidth);
-      return { era, width };
-    });
-  }, [eras, screenWidth]);
+      // Cancel any ongoing animation
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+
+      const pixelsPerYear = getPixelsPerYear(screenWidth, zoomLevel);
+      // 画面中央に対象年を配置
+      const targetScrollX = -((targetYear - TIMELINE_START_YEAR) * pixelsPerYear) + screenWidth / 2;
+      const clampedTarget = clampScrollX(targetScrollX, screenWidth, zoomLevel);
+
+      // If already at target, do nothing
+      if (Math.abs(scrollX - clampedTarget) < 1) {
+        return;
+      }
+
+      // Animate
+      const startScrollX = scrollX;
+      const startTime = getNow();
+
+      const animate = () => {
+        const elapsed = getNow() - startTime;
+        const progress = Math.min(elapsed / JUMP_ANIMATION_DURATION, 1);
+
+        // Ease-out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+
+        const newScrollX = startScrollX + (clampedTarget - startScrollX) * eased;
+        setScroll(newScrollX);
+
+        if (progress < 1) {
+          animationRef.current = requestAnimationFrame(animate);
+        } else {
+          animationRef.current = null;
+        }
+      };
+
+      animationRef.current = requestAnimationFrame(animate);
+    },
+    [screenWidth, zoomLevel, scrollX, setScroll, getNow]
+  );
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: colors.bgSecondary,
-          borderBottomColor: colors.border,
-        },
-      ]}
-    >
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {eraWidths.map(({ era, width }) => {
-          const isCurrentEra = era.id === currentEraId;
-          const eraColor = era.color ?? colors.primary;
+    <View style={[styles.container, { backgroundColor: colors.bgSecondary, borderBottomColor: colors.border }]}>
+      {/* 可変幅チップ行 */}
+      <EraChipRow
+        eras={eras}
+        currentEraId={currentEraId}
+        onEraPress={handleEraPress}
+      />
 
-          return (
-            <Pressable
-              key={era.id}
-              onPress={() => jumpToEra(era)}
-              style={({ pressed }) => [
-                styles.eraItem,
-                {
-                  width,
-                  backgroundColor: isCurrentEra ? eraColor : 'transparent',
-                  borderColor: eraColor,
-                  opacity: pressed ? 0.7 : 1,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.eraName,
-                  {
-                    color: isCurrentEra ? colors.bg : colors.text,
-                    fontSize: typography.size.xs,
-                  },
-                ]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {era.name}
-              </Text>
-              <Text
-                style={[
-                  styles.eraYears,
-                  {
-                    color: isCurrentEra ? colors.bg : colors.textTertiary,
-                    fontSize: 9, // Smaller than xs (10)
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {formatYearShort(era.startYear)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      {/* セパレーター（誤タップ防止） */}
+      <View style={[styles.separator, { backgroundColor: colors.border }]} />
+
+      {/* 真比率ミニマップ */}
+      <MiniMap
+        eras={eras}
+        scrollX={scrollX}
+        zoomLevel={zoomLevel}
+        screenWidth={screenWidth}
+        onPositionPress={handlePositionPress}
+      />
     </View>
   );
 }
-
-// formatYearShort is now imported from @/utils/formatYear
 
 // =============================================================================
 // Styles
@@ -254,27 +217,10 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
 
 const styles = StyleSheet.create({
   container: {
-    height: PICKER_HEIGHT,
     borderBottomWidth: 1,
   },
-  scrollContent: {
-    alignItems: 'stretch',
-  },
-  eraItem: {
-    height: PICKER_HEIGHT - 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 1,
-    borderRadius: 0,
-    marginRight: -1, // Overlap borders
-  },
-  eraName: {
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  eraYears: {
-    marginTop: 2,
-    textAlign: 'center',
+  separator: {
+    height: 4,
+    opacity: 0.3,
   },
 });

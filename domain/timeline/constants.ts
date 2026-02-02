@@ -146,6 +146,35 @@ export const LOD_THRESHOLDS = {
 } as const;
 
 // =============================================================================
+// Year Ruler Constants (036 Year Ruler & Era Labels)
+// =============================================================================
+
+import type { LODLevel } from '@/types/store';
+
+/**
+ * LOD レベルに応じた年代ルーラーの目盛り間隔（年単位）
+ * - L0: 2000年単位（全体俯瞰）
+ * - L1: 500年単位（時代概要）
+ * - L2: 100年単位（詳細表示）
+ * - L3: 50年単位（最大詳細）
+ */
+export const YEAR_RULER_INTERVALS: Record<LODLevel, number> = {
+  0: 2000,
+  1: 500,
+  2: 100,
+  3: 50,
+};
+
+/** 年代ルーラーのY位置（画面高さに対する割合）- Safe Area 考慮 */
+export const YEAR_RULER_Y_RATIO = 0.12;
+
+/** 年代ルーラーの目盛り線の高さ（px） */
+export const YEAR_RULER_TICK_HEIGHT = 8;
+
+/** 年代ルーラーの最小ラベル間隔（px）- ラベル重複防止 */
+export const YEAR_RULER_MIN_LABEL_SPACING = 60;
+
+// =============================================================================
 // Haptics
 // =============================================================================
 

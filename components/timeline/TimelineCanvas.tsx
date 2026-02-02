@@ -39,11 +39,16 @@ import { useTimelineStore, useSettingsStore, useAppStore } from '@/stores';
 import { filterReigns } from '@/domain/timeline/layerFilter';
 import {
   yearToPixel,
+  pixelToYear,
   extractYearFromDate,
   isYearRangeVisible,
   isYearVisible,
+  getVisibleYearRange,
   type CoordinateConfig,
 } from '@/domain/timeline/coordinateSystem';
+import { formatYearShort } from '@/utils/formatYear';
+// TODO: Sprint 4 で和暦表示を有効化時に復活
+// import { seirekiToWakaAsync } from '@/utils/wakaCalendar';
 import {
   TIMELINE_AXIS_Y_RATIO,
   ERA_BAND_TOP_RATIO,
@@ -52,6 +57,10 @@ import {
   EVENT_MARKER_BASE_RADIUS,
   TAG_COLORS,
   DOUBLE_TAP_ZOOM_FACTOR,
+  YEAR_RULER_INTERVALS,
+  YEAR_RULER_Y_RATIO,
+  YEAR_RULER_TICK_HEIGHT,
+  YEAR_RULER_MIN_LABEL_SPACING,
 } from '@/domain/timeline/constants';
 import { ERA_COLORS } from '@/constants/tokens';
 import { triggerHaptic, triggerEraBoundaryHaptic } from '@/utils/haptics';
@@ -75,6 +84,10 @@ import {
 // =============================================================================
 
 const ROBOTO_FONT = require('../../assets/fonts/Roboto-Medium.ttf');
+
+// 日本語フォント（和暦表示用）- MVP では無効化（クラッシュ原因調査中）
+// TODO: Sprint 4 で日本語フォント対応を再検討
+// const NOTO_SANS_JP_FONT = require('../../assets/fonts/NotoSansJP-Medium.ttf');
 
 // =============================================================================
 // Types
@@ -120,9 +133,56 @@ function getEraColor(eraId: string, dbColor: string | null): string {
   return ERA_COLOR_MAP[eraId] ?? '#4A5568';
 }
 
+/** 時代名の短縮マッピング（長い時代名用） */
+const ERA_SHORT_NAMES: Record<string, string> = {
+  安土桃山: '安土',
+};
+
+/** 時代名を取得（幅に応じて短縮名を使用） */
+function getEraDisplayName(eraName: string, availableWidth: number, font: ReturnType<typeof useFont>): string {
+  if (!font) return eraName;
+
+  const fullWidth = font.measureText(eraName).width;
+  if (fullWidth <= availableWidth) {
+    return eraName;
+  }
+
+  // 短縮名があれば使用
+  const shortName = ERA_SHORT_NAMES[eraName];
+  if (shortName) {
+    return shortName;
+  }
+
+  return eraName;
+}
+
 function getEventColor(tags: EventTag[]): string {
   if (tags.length === 0) return TAG_COLORS.default;
   return TAG_COLORS[tags[0]] ?? TAG_COLORS.default;
+}
+
+/**
+ * Era ラベル表示判定（036 Year Ruler & Era Labels）
+ *
+ * LOD レベルに応じた表示ルール:
+ * - L0-L1: 画面中央の年を含む時代のみ表示
+ * - L2-L3: 幅60px以上の時代のみ表示
+ */
+function shouldShowEraLabel(
+  era: Era,
+  lodLevel: LODLevel,
+  config: CoordinateConfig,
+  eraWidthPx: number
+): boolean {
+  // L0-L1: 画面中央の年を含む時代のみ
+  if (lodLevel <= 1) {
+    const centerPixelX = config.screenWidth / 2;
+    const centerYear = pixelToYear(centerPixelX, config);
+    return era.startYear <= centerYear && centerYear < era.endYear;
+  }
+
+  // L2-L3: 幅60px以上の時代のみ
+  return eraWidthPx >= 60;
 }
 
 // =============================================================================
@@ -163,9 +223,16 @@ export function TimelineCanvas({
 
   // Font
   const font = useFont(ROBOTO_FONT, 12);
+  // 日本語フォント - MVP では無効化（Roboto で代用）
+  // TODO: Sprint 4 で日本語フォント対応
+  const jpFont = font;
 
   // ジェスチャーが最後に設定したscrollX値を追跡
   const lastGestureScrollXRef = useRef<number | null>(null);
+  // 外部更新（EraPickerBar等）からの変更かどうかを追跡（無限ループ防止）
+  const isExternalUpdateRef = useRef(false);
+  // ピンチ中フラグ（ピンチ中は時代境界ハプティクスを無効化）
+  const isPinchingRef = useRef(false);
 
   // Sync store with shared values（外部からの変更のみ）
   useEffect(() => {
@@ -177,6 +244,8 @@ export function TimelineCanvas({
       return;
     }
     // 外部からの変更（EraPickerBarなど）→ translateXを更新
+    // フラグを立てて handleGestureScroll での setScroll をスキップさせる
+    isExternalUpdateRef.current = true;
     translateX.value = scrollX;
   }, [scrollX, translateX]);
 
@@ -202,6 +271,7 @@ export function TimelineCanvas({
   const bandHeight = bandBottom - bandTop;
   const axisY = screenHeight * TIMELINE_AXIS_Y_RATIO;
   const labelY = screenHeight * ERA_LABEL_Y_RATIO;
+  const rulerY = screenHeight * YEAR_RULER_Y_RATIO;
 
   // ==========================================================================
   // Event Handlers
@@ -338,11 +408,18 @@ export function TimelineCanvas({
   const pinchStartScrollX = useSharedValue(0);
   const pinchFocalX = useSharedValue(0);
 
+  // ピンチ状態を更新するヘルパー関数（worklet から runOnJS で呼び出し）
+  const setPinching = useCallback((value: boolean) => {
+    isPinchingRef.current = value;
+  }, []);
+
   const pinchGesture = useMemo(
     () =>
       Gesture.Pinch()
         .onBegin((e) => {
           'worklet';
+          // ピンチ中フラグをON（時代境界ハプティクスを無効化）
+          runOnJS(setPinching)(true);
           // ピンチ開始時の状態を記録
           pinchStartZoom.value = scale.value;
           pinchStartScrollX.value = translateX.value;
@@ -370,10 +447,12 @@ export function TimelineCanvas({
         })
         .onEnd(() => {
           'worklet';
+          // ピンチ中フラグをOFF
+          runOnJS(setPinching)(false);
           // 最終値を確定
           runOnJS(handlePinchUpdate)(scale.value, translateX.value);
         }),
-    [scale, pinchStartZoom, pinchStartScrollX, pinchFocalX, translateX, screenWidth, handlePinchUpdate]
+    [scale, pinchStartZoom, pinchStartScrollX, pinchFocalX, translateX, screenWidth, handlePinchUpdate, setPinching]
   );
 
   const tapGesture = useMemo(
@@ -458,16 +537,27 @@ export function TimelineCanvas({
   // ジェスチャーからのスクロール更新をストアに反映
   const handleGestureScroll = useCallback(
     (curr: number, prev: number) => {
-      const crossedEra = detectEraBoundaryCrossing(
-        prev,
-        curr,
-        eras,
-        screenWidth,
-        scale.value
-      );
+      // 外部更新（EraPickerBar等）の場合は setScroll をスキップ（無限ループ防止）
+      if (isExternalUpdateRef.current) {
+        isExternalUpdateRef.current = false;
+        prevScrollXRef.current = curr;
+        return;
+      }
 
-      if (crossedEra) {
-        triggerEraBoundaryHaptic();
+      // ピンチ中でなければ時代境界通過を検出してハプティクスを発火
+      // ピンチ中は意図的なズーム操作なので、境界ハプティクスは不要
+      if (!isPinchingRef.current) {
+        const crossedEra = detectEraBoundaryCrossing(
+          prev,
+          curr,
+          eras,
+          screenWidth,
+          scale.value
+        );
+
+        if (crossedEra) {
+          triggerEraBoundaryHaptic();
+        }
       }
 
       prevScrollXRef.current = curr;
@@ -498,6 +588,23 @@ export function TimelineCanvas({
   const visibleEras = useMemo(() => {
     return eras.filter((era) => isYearRangeVisible(era.startYear, era.endYear, config));
   }, [eras, config]);
+
+  // 年代ルーラーの目盛り計算（036 Year Ruler）
+  const yearMarks = useMemo(() => {
+    const interval = YEAR_RULER_INTERVALS[lodLevel];
+    const { startYear: visibleStartYear, endYear: visibleEndYear } = getVisibleYearRange(config);
+    const marks: number[] = [];
+    // 最初の目盛りを interval の倍数に揃える
+    const alignedStart = Math.ceil(visibleStartYear / interval) * interval;
+    for (let year = alignedStart; year <= visibleEndYear; year += interval) {
+      marks.push(year);
+    }
+    return marks;
+  }, [lodLevel, config]);
+
+  // L3 和暦ラベルキャッシュ - MVP では無効化（西暦のみ表示）
+  // TODO: Sprint 4 で日本語フォント対応後に有効化
+  const warekiLabels = useMemo(() => new Map<number, string>(), []);
 
   // LODレベルに基づくイベントフィルタリング
   const lodFilteredEvents = useMemo(() => {
@@ -651,6 +758,50 @@ export function TimelineCanvas({
               color={colors.bg}
             />
 
+            {/* 年代ルーラー（036 Year Ruler） */}
+            <Group>
+              {yearMarks.map((year, index) => {
+                const x = yearToPixel(year, config);
+                // L3 で和暦表示（645年以降のみ）、それ以外は西暦
+                // 日本語フォントが未読み込みの場合は西暦にフォールバック
+                const warekiLabel = (lodLevel === 3 && jpFont) ? warekiLabels.get(year) : undefined;
+                const label = warekiLabel ?? formatYearShort(year);
+                // 和暦は日本語フォント、西暦は英語フォントを使用（フォールバック付き）
+                const labelFont = warekiLabel ? jpFont : font;
+                const textWidth = labelFont?.measureText(label).width ?? 0;
+
+                // ラベル重複防止：前の目盛りとの間隔をチェック
+                // L3 和暦は文字幅が大きいため間隔を広めに
+                const minSpacing = warekiLabel ? YEAR_RULER_MIN_LABEL_SPACING * 1.5 : YEAR_RULER_MIN_LABEL_SPACING;
+                const prevX = index > 0 ? yearToPixel(yearMarks[index - 1], config) : -Infinity;
+                const shouldShowLabel = (x - prevX) >= minSpacing;
+
+                return (
+                  <Group key={`ruler-${year}`}>
+                    {/* 目盛り線 */}
+                    <Line
+                      p1={vec(x, rulerY)}
+                      p2={vec(x, rulerY + YEAR_RULER_TICK_HEIGHT)}
+                      color={colors.primary}
+                      strokeWidth={1}
+                      opacity={0.5}
+                    />
+                    {/* 年ラベル（間隔が十分な場合のみ表示、L3は和暦） */}
+                    {labelFont && shouldShowLabel && (
+                      <Text
+                        x={x - textWidth / 2}
+                        y={rulerY + YEAR_RULER_TICK_HEIGHT + 14}
+                        text={label}
+                        font={labelFont}
+                        color={colors.text}
+                        opacity={0.8}
+                      />
+                    )}
+                  </Group>
+                );
+              })}
+            </Group>
+
             {/* 時代背景帯 */}
             <Group>
               {visibleEras.map((era) => {
@@ -679,16 +830,18 @@ export function TimelineCanvas({
                       strokeWidth={1}
                       opacity={0.7}
                     />
-                    {/* ラベル */}
-                    {font && width > 30 && (() => {
-                      const textWidth = font.measureText(era.name).width;
+                    {/* ラベル（LOD対応: L0-L1は中央の時代のみ、L2-L3は幅60px以上のみ） */}
+                    {/* 長い時代名は短縮表示（安土桃山→安土）、日本語フォント使用 */}
+                    {jpFont && shouldShowEraLabel(era, lodLevel, config, width) && (() => {
+                      const displayName = getEraDisplayName(era.name, width, jpFont);
+                      const textWidth = jpFont.measureText(displayName).width;
                       const labelX = startX + (width - textWidth) / 2;
                       return (
                         <Text
                           x={labelX}
                           y={labelY}
-                          text={era.name}
-                          font={font}
+                          text={displayName}
+                          font={jpFont}
                           color={colors.text}
                         />
                       );
@@ -778,13 +931,13 @@ export function TimelineCanvas({
                         opacity={0.6}
                       />
                     )}
-                    {/* L3: イベントラベル表示 */}
-                    {showLabels && font && (
+                    {/* L3: イベントラベル表示（日本語フォント使用） */}
+                    {showLabels && jpFont && (
                       <Text
-                        x={x - font.measureText(event.title).width / 2}
+                        x={x - jpFont.measureText(event.title).width / 2}
                         y={axisY - radius - 8}
                         text={event.title}
-                        font={font}
+                        font={jpFont}
                         color={colors.text}
                       />
                     )}

@@ -1,16 +1,30 @@
 /**
  * Tab Layout - 3タブナビゲーション
  * Sprint 1: 011 Navigation Architecture
+ * Sprint 3: 043 Onboarding Flow
  */
 
-import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Redirect, Tabs } from 'expo-router';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { useTheme } from '@/hooks/useTheme';
+import { useOnboardingStore } from '@/stores/onboardingStore';
 
 export default function TabLayout() {
   const { colors } = useTheme();
+  const initialized = useOnboardingStore((s) => s.initialized);
+  const completed = useOnboardingStore((s) => s.completed);
+
+  // オンボーディング状態チェック中は何も表示しない
+  if (!initialized) {
+    return null;
+  }
+
+  // 未完了の場合はオンボーディング画面へリダイレクト
+  if (!completed) {
+    return <Redirect href="/onboarding" />;
+  }
 
   return (
     <Tabs

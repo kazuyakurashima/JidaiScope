@@ -455,23 +455,28 @@ async function seedWarekiEras(): Promise<void> {
 
   console.log(`[Seed] Inserting ${warekiErasData.length} wareki eras...`);
 
-  const erasToInsert = warekiErasData.map((era: {
+  // NOTE: 直接 INSERT を使用（seedDatabase のトランザクション内で呼ばれるため）
+  // insertWarekiEras() は withTransactionAsync を使用するためネスト不可
+  const db = await getDatabase();
+  for (const era of warekiErasData as Array<{
     name: string;
     reading: string;
     startYear: number;
-    endYear: number;
+    endYear: number | null;
     period: string;
     sequence?: number;
-  }) => ({
-    name: era.name,
-    reading: era.reading,
-    startYear: era.startYear,
-    endYear: era.endYear,
-    period: era.period,
-    sequence: era.sequence ?? 0,
-  }));
-
-  await insertWarekiEras(erasToInsert);
+  }>) {
+    await db.runAsync(
+      `INSERT OR REPLACE INTO wareki_eras (name, reading, startYear, endYear, period, sequence)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      era.name,
+      era.reading,
+      era.startYear,
+      era.endYear,
+      era.period,
+      era.sequence ?? 0
+    );
+  }
 
   // Store the data version (outside transaction since seedDatabase has its own)
   // Note: For fresh DB seeding via seedDatabase(), ensureWarekiData() will set the version
@@ -531,7 +536,7 @@ async function refreshWarekiData(): Promise<void> {
       name: string;
       reading: string;
       startYear: number;
-      endYear: number;
+      endYear: number | null;
       period: string;
       sequence?: number;
     }) => ({

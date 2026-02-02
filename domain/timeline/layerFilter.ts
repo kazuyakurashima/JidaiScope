@@ -2,7 +2,10 @@
  * layerFilter.ts - レイヤーフィルタリングロジック
  * Sprint 2: 024 Layer Management
  *
- * Free/Pro 制限:
+ * MVP (v1.0): 全機能無料開放
+ * - appStore.proUnlocked = true のため、制限は発動しない
+ *
+ * v1.5 以降の Free/Pro 制限（現在は無効）:
  * - Free: 天皇10代、将軍5代、人物20人
  * - Pro: 全データ表示
  *

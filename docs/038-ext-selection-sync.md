@@ -143,18 +143,27 @@ interface EraChipRowProps {
 ```typescript
 const longPressGesture = Gesture.LongPress()
   .minDuration(500)           // EraChipRowと統一（500ms）
-  .maxDistance(10)            // 微小な揺れは許容
-  .onStart((e) => {
+  .onEnd((e) => {             // onStart ではなく onEnd で発火
     'worklet';
     runOnJS(handleLongPress)(e.x, e.y);
   });
 
-// パン/ピンチとの競合設定
+// ジェスチャー競合解決（3層構造）
+// 1. Exclusive: 長押し成功 → タップ抑制
+const tapAndLongPress = Gesture.Exclusive(longPressGesture, tapGestures);
+
+// 2. Race: タップ/長押し vs パン/ピンチ
+//    パン開始（~150ms）で長押しはキャンセルされる
 const composedGesture = Gesture.Race(
-  Gesture.Simultaneous(panGesture, pinchGesture),
-  longPressGesture  // パン開始で長押しはキャンセル
+  tapAndLongPress,
+  Gesture.Simultaneous(panGesture, pinchGesture)
 );
 ```
+
+**ジェスチャー競合ルール:**
+- `Gesture.Exclusive`: 長押し成功時にタップを抑制（二重発火防止）
+- `Gesture.Race`: パン/ピンチ開始で長押しを確実にキャンセル
+- 長押し閾値500msはパン開始（~150ms）より十分長いため、意図しない長押し発火を防止
 
 ### 4. 発見性（初回ヒント）
 
@@ -265,10 +274,37 @@ components/timeline/
 
 ## リスク・考慮事項
 
-- **ジェスチャー競合:** パン/ピンチ操作中に長押しが誤発火しないよう、`Gesture.Race` で優先度設定
+- **ジェスチャー競合:** パン/ピンチ操作中に長押しが誤発火しないよう、`Gesture.Race` + `Gesture.Exclusive` で制御
 - **長押し時間:** 500ms統一（EraChipRow / Canvas共通）でパン開始（~150ms）より十分長く
 - **発見性:** 長押しは発見されにくいため、初回ヒント必須
-- **a11y:** VoiceOverで長押し操作を代替できるよう `accessibilityActions` 設定
+- **a11y:** 下記参照
+
+### アクセシビリティ対応
+
+**EraChipRow（React Native Pressable）:**
+```typescript
+<Pressable
+  accessibilityRole="button"
+  accessibilityLabel={`${era.name}時代`}
+  accessibilityHint="タップで選択、長押しで詳細表示"
+  accessibilityActions={[
+    { name: 'activate', label: '選択' },
+    { name: 'longpress', label: '詳細を表示' },
+  ]}
+  onAccessibilityAction={(event) => {
+    if (event.nativeEvent.actionName === 'longpress') {
+      onEraLongPress(era);
+    } else {
+      onEraPress(era);
+    }
+  }}
+/>
+```
+
+**TimelineCanvas（Skia）:**
+- Canvas上の時代領域はVoiceOverで直接操作不可
+- **代替経路:** EraPickerBarのチップから長押し操作を提供
+- **将来対応:** 043 Onboardingで「トップバーから時代詳細にアクセス」をガイド
 
 ---
 
@@ -282,6 +318,12 @@ components/timeline/
 ---
 
 ## 変更履歴
+
+### v1.2 (2026-02-02)
+
+- ジェスチャー競合ルールを明確化（Exclusive + Race の3層構造）
+- a11yアクセシビリティ対応仕様を追加
+- TimelineCanvasのVoiceOver代替経路を明記
 
 ### v1.1 (2026-02-02)
 

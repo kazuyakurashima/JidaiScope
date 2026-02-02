@@ -210,12 +210,11 @@ export function ContextHeader({ eras, reigns, screenWidth }: ContextHeaderProps)
     }
 
     // L3: 和暦追加 + 天皇・将軍両方
+    // 注: 実装では seirekiToWakaAsync + デバウンス(50ms) + キャッシュを使用
+    // 詳細は v4.3 変更履歴を参照
     if (lodLevel >= 3 && centerYear > 0) {
       content.year = formatYear(centerYear);
-      const wareki = formatWareki(centerYear);
-      if (wareki) {
-        content.wareki = wareki;
-      }
+      // wareki は useEffect + useState で非同期管理（下記参照）
 
       // L3では天皇・将軍両方表示
       const reignParts: string[] = [];
@@ -548,10 +547,11 @@ const isCompactLayout = screenWidth <= 320;
 
 ## リスク・考慮事項
 
-- **パフォーマンス:** `scrollX` は60fps更新のため、useMemoでメモ化。不要な再計算を避ける
+- **パフォーマンス:** `scrollX` は60fps更新のため、useMemoでメモ化。和暦はデバウンス(50ms)+キャッシュで負荷軽減
 - **紀元前対応:** 縄文時代など紀元前の表示に対応（`formatYear` 使用）
 - **時代の重複:** 戦国・室町のように重複する時代は、最も短い（具体的な）時代を表示
 - **将軍不在期間:** 幕府がない時代（平安前期など）は天皇のみ表示
+- **Safe Area:** ContextHeaderは`app/(tabs)/index.tsx`内に配置され、親のSafeAreaViewで制御。ノッチ/ステータスバーの下に表示される
 
 ---
 

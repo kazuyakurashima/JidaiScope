@@ -147,13 +147,18 @@ ChronosEdge MVP
 │   │
 │   ├─ 037: EraPickerBar Sync → 038に統合
 │   │
-│   ├─ 038: EraPickerBar Redesign 【新規】
+│   ├─ 038: EraPickerBar Redesign ✅
 │   │   ├─ 可変幅チップナビゲーション
 │   │   ├─ 真比率ミニマップ
 │   │   ├─ 037の自動スクロール機能を統合
 │   │   └─ [依存] 023, 037
 │   │
-│   ├─ 039: Context Header 【新規】
+│   ├─ 038-ext: Selection Sync UX ✅
+│   │   ├─ タップ即時ハイライト + 再タップ解除
+│   │   ├─ 長押しで時代詳細画面へ遷移
+│   │   └─ [依存] 038
+│   │
+│   ├─ 039: Context Header ✅
 │   │   ├─ 現在位置情報の常時表示
 │   │   ├─ 時代名/年代/天皇・将軍
 │   │   ├─ LOD連動で表示情報増減

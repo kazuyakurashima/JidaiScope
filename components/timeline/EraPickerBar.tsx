@@ -50,6 +50,8 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
   const scrollX = useTimelineStore((s) => s.scrollX);
   const zoomLevel = useTimelineStore((s) => s.zoomLevel);
   const setScroll = useTimelineStore((s) => s.setScroll);
+  const selectedEraId = useTimelineStore((s) => s.selectedEraId);
+  const selectEra = useTimelineStore((s) => s.selectEra);
 
   // Animation ref
   const animationRef = useRef<number | null>(null);
@@ -99,6 +101,9 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
     (era: Era) => {
       void triggerHaptic('selection');
 
+      // 即座に選択状態を更新（タップ即時フィードバック）
+      selectEra(era.id);
+
       // Cancel any ongoing animation
       if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current);
@@ -137,7 +142,7 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
 
       animationRef.current = requestAnimationFrame(animate);
     },
-    [screenWidth, zoomLevel, scrollX, setScroll, getNow]
+    [screenWidth, zoomLevel, scrollX, setScroll, getNow, selectEra]
   );
 
   // ミニマップタップ時のジャンプ処理（スムーズアニメーション）
@@ -192,7 +197,7 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
       {/* 可変幅チップ行 */}
       <EraChipRow
         eras={eras}
-        currentEraId={currentEraId}
+        currentEraId={selectedEraId ?? currentEraId}
         onEraPress={handleEraPress}
       />
 

@@ -160,20 +160,32 @@ const composedGesture = Gesture.Race(
 
 ```typescript
 // EraPickerBar.tsx
-const [showLongPressHint, setShowLongPressHint] = useState(false);
+// onboardingStore で永続化状態を管理
+const initialized = useIsOnboardingInitialized();
+const longPressHintShown = useLongPressHintShown();
 
 useEffect(() => {
-  AsyncStorage.getItem('hint_era_longpress').then((seen) => {
-    if (!seen) {
-      setShowLongPressHint(true);
-      setTimeout(() => {
-        setShowLongPressHint(false);
-        AsyncStorage.setItem('hint_era_longpress', 'true');
-      }, 4000);
-    }
-  });
-}, []);
+  // 初期化レース対策: AsyncStorage読み込み完了まで待機
+  if (!initialized) return;
+  if (longPressHintShown) return;
+
+  // 1秒後に表示開始、4秒間表示後に自動消失
+  const showTimer = setTimeout(() => setShowHint(true), 1000);
+  const hideTimer = setTimeout(() => {
+    setShowHint(false);
+    markLongPressHintShown(); // AsyncStorageに永続化
+  }, 5000);
+
+  return () => {
+    clearTimeout(showTimer);
+    clearTimeout(hideTimer);
+  };
+}, [initialized, longPressHintShown]);
 ```
+
+**初期化レース対策:**
+- `checkCompleted()`完了前に`longPressHintShown=false`のままヒントが表示される問題を防止
+- `useIsOnboardingInitialized()`で初期化完了を待機してからヒント表示判定
 
 ---
 
@@ -238,13 +250,15 @@ useEffect(() => {
 
 ```
 stores/
-└── timelineStore.ts          # selectEra 修正
+├── timelineStore.ts          # selectEra 修正（再タップ解除）
+├── onboardingStore.ts        # longPressHintShown 状態追加
+└── index.ts                  # エクスポート更新
 
 components/timeline/
-├── EraChipRow.tsx            # onEraLongPress 追加
+├── EraChipRow.tsx            # onEraLongPress props追加
 ├── EraPickerBar.tsx          # handleEraLongPress + ヒントUI
-├── TimelineCanvas.tsx        # 長押しジェスチャー追加
-└── hitDetection.ts           # getEraAtPoint 確認
+├── TimelineCanvas.tsx        # 長押しジェスチャー + focusedEraId追加
+└── hitDetection.ts           # hitTest で時代検出
 ```
 
 ---
@@ -268,6 +282,12 @@ components/timeline/
 ---
 
 ## 変更履歴
+
+### v1.1 (2026-02-02)
+
+- ファイル構成に `onboardingStore.ts` 追加
+- 初期化レース対策の設計を追記
+- Todoリスト進捗更新
 
 ### v1.0 (2026-02-02)
 

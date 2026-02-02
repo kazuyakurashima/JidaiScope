@@ -34,9 +34,8 @@ interface ContextHeaderProps {
 
 const HEADER_HEIGHT = 44;
 
-// 画面幅の閾値（039仕様: オーバーフロー/省略ルール）
-const SCREEN_WIDTH_SE = 320;  // iPhone SE - 和暦非表示、在位者省略可能
-const SCREEN_WIDTH_MD = 375;  // iPhone 13 - 在位者省略可能
+// 画面幅の閾値（039仕様: コンパクトレイアウト用）
+const SCREEN_WIDTH_SE = 320;  // iPhone SE - コンパクトレイアウト
 
 // =============================================================================
 // Helper: 時代検索の最適化
@@ -82,6 +81,46 @@ function useFindEraByYear(sortedEras: Era[], year: number): Era | null {
 }
 
 /**
+ * 在位者を年から検索（キャッシュ付き最適化版）
+ * 前回の結果をキャッシュし、同じ在位期間内ならO(1)で返す
+ */
+function useFindReignByYear(
+  reigns: Reign[],
+  year: number,
+  officeType: 'emperor' | 'shogun'
+): Reign | null {
+  const lastReignRef = useRef<Reign | null>(null);
+
+  return useMemo(() => {
+    // キャッシュヒット: 前回と同じ在位期間内ならそのまま返す
+    const lastReign = lastReignRef.current;
+    if (
+      lastReign &&
+      lastReign.officeType === officeType &&
+      year >= lastReign.startYear &&
+      year < lastReign.endYear
+    ) {
+      return lastReign;
+    }
+
+    // 新規検索
+    for (const reign of reigns) {
+      if (
+        reign.officeType === officeType &&
+        year >= reign.startYear &&
+        year < reign.endYear
+      ) {
+        lastReignRef.current = reign;
+        return reign;
+      }
+    }
+
+    lastReignRef.current = null;
+    return null;
+  }, [reigns, year, officeType]);
+}
+
+/**
  * 色のコントラスト判定（堅牢化版）
  * 6桁Hex以外はデフォルト色にフォールバック
  */
@@ -123,10 +162,12 @@ export function ContextHeader({ eras, reigns }: ContextHeaderProps) {
   const zoomLevel = useTimelineStore((s) => s.zoomLevel);
   const lodLevel = useTimelineStore((s) => s.lodLevel);
 
-  // 和暦の状態（非同期取得）
+  // 和暦の状態（非同期取得 + キャッシュ + デバウンス）
   const [wareki, setWareki] = useState<string | null>(null);
   const lastCenterYearRef = useRef<number | null>(null);
   const warekiRequestIdRef = useRef(0); // キャンセル用
+  const warekiCacheRef = useRef<Map<number, string | null>>(new Map()); // 結果キャッシュ
+  const warekiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null); // デバウンス用
 
   // 事前ソート済み時代リスト
   const sortedEras = useEraByYear(eras);
@@ -146,63 +187,79 @@ export function ContextHeader({ eras, reigns }: ContextHeaderProps) {
   // 現在の時代を特定（キャッシュ付き）
   const currentEra = useFindEraByYear(sortedEras, centerYear);
 
-  // 現在の天皇を特定
-  const currentEmperor = useMemo(() => {
-    return reigns.find(
-      (r) =>
-        r.officeType === 'emperor' &&
-        centerYear >= r.startYear &&
-        centerYear < r.endYear
-    );
-  }, [reigns, centerYear]);
+  // 現在の天皇を特定（キャッシュ付き）
+  const currentEmperor = useFindReignByYear(reigns, centerYear, 'emperor');
 
-  // 現在の将軍を特定
-  const currentShogun = useMemo(() => {
-    return reigns.find(
-      (r) =>
-        r.officeType === 'shogun' &&
-        centerYear >= r.startYear &&
-        centerYear < r.endYear
-    );
-  }, [reigns, centerYear]);
+  // 現在の将軍を特定（キャッシュ付き）
+  const currentShogun = useFindReignByYear(reigns, centerYear, 'shogun');
 
-  // L3: 和暦を非同期で取得（全時代対応）
+  // L3: 和暦を非同期で取得（デバウンス＋キャッシュ付き）
+  useEffect(() => {
+    // クリーンアップ用
+    return () => {
+      if (warekiDebounceRef.current) {
+        clearTimeout(warekiDebounceRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (lodLevel >= 3 && centerYear > 0) {
       // 同じ年なら再計算しない
       if (lastCenterYearRef.current === centerYear) return;
       lastCenterYearRef.current = centerYear;
 
+      // キャッシュヒットチェック
+      const cached = warekiCacheRef.current.get(centerYear);
+      if (cached !== undefined) {
+        setWareki(cached);
+        return;
+      }
+
+      // 前回のデバウンスタイマーをクリア
+      if (warekiDebounceRef.current) {
+        clearTimeout(warekiDebounceRef.current);
+      }
+
       // リクエストIDでキャンセル管理
       const requestId = ++warekiRequestIdRef.current;
 
-      // 非同期で和暦を取得（全時代対応）
-      seirekiToWakaAsync(centerYear).then((result) => {
-        // 最新のリクエストのみ適用
-        if (requestId === warekiRequestIdRef.current) {
-          setWareki(result);
-        }
-      });
+      // 50msデバウンス（高速スクロール中の無駄なAPI呼び出しを抑制）
+      warekiDebounceRef.current = setTimeout(() => {
+        seirekiToWakaAsync(centerYear).then((result) => {
+          // 最新のリクエストのみ適用
+          if (requestId === warekiRequestIdRef.current) {
+            // キャッシュに保存（最大100件）
+            if (warekiCacheRef.current.size >= 100) {
+              const firstKey = warekiCacheRef.current.keys().next().value;
+              if (firstKey !== undefined) {
+                warekiCacheRef.current.delete(firstKey);
+              }
+            }
+            warekiCacheRef.current.set(centerYear, result);
+            setWareki(result);
+          }
+        });
+      }, 50);
     } else {
       setWareki(null);
       lastCenterYearRef.current = null;
     }
   }, [lodLevel, centerYear]);
 
-  // 画面幅に応じた表示制御（039仕様: オーバーフロー/省略ルール）
-  // 省略優先度: 在位者 > 和暦 > 年代 > 時代名（時代名は常に表示）
-  const isSmallScreen = screenWidth <= SCREEN_WIDTH_SE;  // <=320: 在位者省略、和暦非表示
-  const isMediumScreen = screenWidth <= SCREEN_WIDTH_MD; // <=375: 在位者省略可能
+  // 画面幅に応じたレイアウト制御（039仕様v4.3: L3は常に全情報表示）
+  const isCompactLayout = screenWidth <= SCREEN_WIDTH_SE;  // <=320: コンパクトレイアウト
 
   // LODに応じた年表示
   const yearDisplay = useMemo(() => {
     if (lodLevel < 1) return null;
 
     if (lodLevel >= 3) {
-      // L3: 正確な年 + 和暦（320px以下は和暦非表示）
+      // L3: 正確な年 + 和暦（常に表示、小画面でも省略しない）
       const yearText = formatYear(centerYear);
-      if (wareki && !isSmallScreen) {
-        return `${yearText}（${wareki}）`;
+      if (wareki) {
+        // コンパクトレイアウト: 括弧省略
+        return isCompactLayout ? `${yearText} ${wareki}` : `${yearText}（${wareki}）`;
       }
       return yearText;
     }
@@ -210,20 +267,17 @@ export function ContextHeader({ eras, reigns }: ContextHeaderProps) {
     // L1-L2: 100年単位に丸める
     const roundedYear = Math.round(centerYear / 100) * 100;
     return `${formatYear(roundedYear)}頃`;
-  }, [lodLevel, centerYear, wareki, isSmallScreen]);
+  }, [lodLevel, centerYear, wareki, isCompactLayout]);
 
   // L2: 代表者表示（天皇優先、なければ将軍）
-  // L3: 天皇と将軍の両方
+  // L3: 天皇と将軍の両方（小画面でも省略しない）
   const reignDisplay = useMemo(() => {
     if (lodLevel < 2) return null;
-
-    // 狭い画面では在位者を表示しない
-    if (isSmallScreen) return null;
 
     const parts: string[] = [];
 
     if (lodLevel >= 3) {
-      // L3: 両方表示
+      // L3: 両方表示（常に、小画面でも省略しない）
       if (currentEmperor?.name) {
         parts.push(`👑${currentEmperor.name}`);
       }
@@ -240,7 +294,7 @@ export function ContextHeader({ eras, reigns }: ContextHeaderProps) {
     }
 
     return parts.length > 0 ? parts.join(' ') : null;
-  }, [lodLevel, currentEmperor, currentShogun, isSmallScreen]);
+  }, [lodLevel, currentEmperor, currentShogun]);
 
   // 時代名のテキストカラー（コントラスト確保・堅牢化）
   const eraTextColor = useMemo(() => {
@@ -269,6 +323,8 @@ export function ContextHeader({ eras, reigns }: ContextHeaderProps) {
           <Text
             style={[styles.yearText, { color: colors.textSecondary }]}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={isCompactLayout ? 0.5 : 0.7}
           >
             {yearDisplay}
           </Text>
@@ -282,6 +338,8 @@ export function ContextHeader({ eras, reigns }: ContextHeaderProps) {
           <Text
             style={[styles.reignText, { color: colors.textSecondary }]}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={isCompactLayout ? 0.5 : 0.7}
             ellipsizeMode="tail"
           >
             {reignDisplay}

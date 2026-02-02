@@ -28,7 +28,7 @@
 | **Sprint 0** | Week 1   | 技術検証               | 001                                                |
 | **Sprint 1** | Week 2-3 | 基盤構築               | 010, 011, 012, 013, 014, 015, 016                  |
 | **Sprint 2** | Week 3-4 | タイムラインコア       | 020, 021, 022, 023, 024, 025                       |
-| **Sprint 3** | Week 4-6 | 検索・詳細・UI完成     | 030-035 ✅, 036, 037, 038, 039, 024-ext, 043       |
+| **Sprint 3** | Week 4-6 | 検索・詳細・UI完成     | 030-035 ✅, 036, 037, 038, 038-ext, 039, 024-ext, 043 |
 | **Sprint 4** | Week 6-7 | 設定・品質・リリース   | 040, 050, 052, 053, 054, 055                       |
 | **v1.5+**    | Post-MVP | 課金・世界史連携       | 041, 042, 044 (中国), 045 (米), 046 (英)           |
 
@@ -277,6 +277,7 @@ ChronosEdge MVP
 | 037 | EraPickerBar Sync    | → 038に統合                      | -      | -        | -                 | 統合 |
 | 038 | EraPickerBar Redesign | 可変幅 + ミニマップ + 自動スクロール | **P0** | 1.5d | 023              | 新規 |
 | 039 | Context Header       | 現在位置情報の常時表示           | **P1** | 1d       | 020, 022, 024     | 新規 |
+| 038-ext | Selection Sync UX | 選択同期 + 長押し詳細遷移        | **P1** | 1d       | 038, 020          | 新規 |
 | 024-ext | 天皇将軍LOD連動強化 | LODに応じた段階的表示          | **P1** | 1d       | 024               | 新規 |
 | 043 | Onboarding Flow      | ジェスチャーチュートリアル       | **P0** | 1.5d     | 020, 021, 023     | 移動 |
 
@@ -467,6 +468,7 @@ Week 6-7 (Sprint 4):
 - [x] [037-era-picker-sync.md](037-era-picker-sync.md) - EraPickerBar Sync → 038に統合
 - [ ] [038-era-picker-redesign.md](038-era-picker-redesign.md) - EraPickerBar Redesign **【新規】**
 - [ ] [039-context-header.md](039-context-header.md) - Context Header **【新規】**
+- [ ] [038-ext-selection-sync.md](038-ext-selection-sync.md) - 038-ext: Selection Sync UX **【新規】**
 - [ ] [024-layer-management.md](024-layer-management.md) - 024-ext: 天皇将軍LOD連動強化
 - [ ] [043-onboarding-flow.md](043-onboarding-flow.md) - Onboarding **【Sprint 4から移動】**
 

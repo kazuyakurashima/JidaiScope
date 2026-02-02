@@ -143,8 +143,9 @@ interface EraChipRowProps {
 ```typescript
 const longPressGesture = Gesture.LongPress()
   .minDuration(500)           // EraChipRowと統一（500ms）
-  .onEnd((e) => {             // onStart ではなく onEnd で発火
+  .onEnd((e, success) => {    // success: 長押し成功時のみtrue
     'worklet';
+    if (!success) return;     // キャンセル時は何もしない
     runOnJS(handleLongPress)(e.x, e.y);
   });
 
@@ -244,7 +245,7 @@ useEffect(() => {
 
 - [x] `TimelineCanvas.tsx`: 長押しジェスチャー追加（`Gesture.LongPress`）
 - [x] `hitDetection.ts`: `hitTest` で時代検出
-- [x] ジェスチャー競合設定（`Gesture.Exclusive`）
+- [x] ジェスチャー競合設定（`Gesture.Exclusive` + `Gesture.Race`）
 - [x] 動作確認: 時代レーン長押し → 詳細画面遷移
 
 ### Phase 4: テスト・仕上げ

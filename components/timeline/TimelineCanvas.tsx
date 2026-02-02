@@ -561,8 +561,10 @@ export function TimelineCanvas({
     () =>
       Gesture.LongPress()
         .minDuration(LONG_PRESS_DELAY)
-        .onEnd((e) => {
+        .onEnd((e, success) => {
           'worklet';
+          // 長押しがキャンセルされた場合（パン開始等）は何もしない
+          if (!success) return;
           const x = e.x;
           const y = e.y;
           const currentScale = scale.value;

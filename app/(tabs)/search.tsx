@@ -25,10 +25,12 @@ import {
   View,
 } from 'react-native';
 
+import { TipModal } from '@/components/ui/TipModal';
 import { useTheme } from '@/hooks/useTheme';
 import { useSearchStore } from '@/stores/searchStore';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { useAppStore } from '@/stores/appStore';
+import { useOnboardingStore, useWarekiTipShown, useIsOnboardingInitialized } from '@/stores/onboardingStore';
 import { search, type SearchResultItem } from '@/domain/search/searchService';
 import { triggerHaptic } from '@/utils/haptics';
 import {
@@ -68,8 +70,24 @@ export default function SearchScreen() {
   const { searchHistory, cacheResults, getCachedResult, touchHistory, clearHistory } = useSearchStore();
   const { setScroll, setZoom, setLOD } = useTimelineStore();
 
+  // プログレッシブ開示: 和暦検索Tip
+  const onboardingInitialized = useIsOnboardingInitialized();
+  const warekiTipShown = useWarekiTipShown();
+  const markWarekiTipShown = useOnboardingStore((s) => s.markWarekiTipShown);
+  const [showWarekiTip, setShowWarekiTip] = useState(false);
+  const hasSearchedRef = useRef(false);
+  const warekiTipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // デバウンスタイマー
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // アンマウント時のタイマークリーンアップ
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (warekiTipTimerRef.current) clearTimeout(warekiTipTimerRef.current);
+    };
+  }, []);
 
   // 検索実行
   const performSearch = useCallback(
@@ -90,6 +108,11 @@ export default function SearchScreen() {
         setSuggestions(cached.suggestions);
         // 履歴順を更新（直近順を維持）
         touchHistory(searchQuery);
+        // キャッシュヒット時でも初回なら和暦Tipを表示（initialized完了後のみ）
+        if (onboardingInitialized && cached.items.length > 0 && !warekiTipShown && !hasSearchedRef.current) {
+          hasSearchedRef.current = true;
+          warekiTipTimerRef.current = setTimeout(() => setShowWarekiTip(true), 500);
+        }
         return;
       }
 
@@ -114,6 +137,15 @@ export default function SearchScreen() {
           suggestions: result.suggestions,
           timestamp: Date.now(),
         });
+
+        // 初回検索成功時に和暦Tipを表示（initialized完了後のみ）
+        if (onboardingInitialized && result.items.length > 0 && !warekiTipShown && !hasSearchedRef.current) {
+          hasSearchedRef.current = true;
+          // 検索結果表示後に少し遅延してTip表示
+          warekiTipTimerRef.current = setTimeout(() => {
+            setShowWarekiTip(true);
+          }, 500);
+        }
       } catch (error) {
         console.error('Search error:', error);
         setResults([]);
@@ -123,7 +155,7 @@ export default function SearchScreen() {
         setIsLoading(false);
       }
     },
-    [dbReady, cacheResults, getCachedResult, touchHistory]
+    [dbReady, cacheResults, getCachedResult, touchHistory, onboardingInitialized, warekiTipShown]
   );
 
   // デバウンス付き検索
@@ -208,6 +240,12 @@ export default function SearchScreen() {
     setSuggestions([]);
     setTotalCount(0);
   }, []);
+
+  // 和暦Tip閉じる
+  const handleWarekiTipClose = useCallback(() => {
+    setShowWarekiTip(false);
+    void markWarekiTipShown();
+  }, [markWarekiTipShown]);
 
   // 結果アイテムのレンダリング
   const renderResult = useCallback(
@@ -466,6 +504,17 @@ export default function SearchScreen() {
           </View>
         </View>
       )}
+
+      {/* プログレッシブ開示: 和暦検索Tip */}
+      <TipModal
+        visible={showWarekiTip}
+        title="和暦でも検索できます"
+        description="「明治」「天平」などの和暦で検索すると、その年代の出来事が見つかります。"
+        icon="calendar-outline"
+        primaryButtonText="OK"
+        onPrimaryPress={handleWarekiTipClose}
+        onClose={handleWarekiTipClose}
+      />
     </SafeAreaView>
   );
 }

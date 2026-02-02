@@ -28,7 +28,7 @@
 | **Sprint 0** | Week 1   | 技術検証               | 001                                                |
 | **Sprint 1** | Week 2-3 | 基盤構築               | 010, 011, 012, 013, 014, 015, 016                  |
 | **Sprint 2** | Week 3-4 | タイムラインコア       | 020, 021, 022, 023, 024, 025                       |
-| **Sprint 3** | Week 4-6 | 検索・詳細・UI完成     | 030-035 ✅, 036, 037→038, 038 ✅, 038-ext ✅, 039 ✅, 024-ext ✅, 043 |
+| **Sprint 3** | Week 4-6 | 検索・詳細・UI完成     | 030-035 ✅, 036 🔄, 037→038, 038 ✅, 038-ext ✅, 039 ✅, 024-ext ✅, 043 ✅ |
 | **Sprint 4** | Week 6-7 | 設定・品質・リリース   | 040, 050, 052, 053, 054, 055                       |
 | **v1.5+**    | Post-MVP | 課金・世界史連携       | 041, 042, 044 (中国), 045 (米), 046 (英)           |
 
@@ -278,13 +278,13 @@ ChronosEdge MVP
 | 033 | Source Display       | 典拠表示（100件）                | **P1** | 1d       | 013, 031          | ✅   |
 | 034 | Bookmarks Feature    | ブックマーク保存・管理           | **P1** | 1d       | 012, 014          | ✅   |
 | 035 | Screenshot Share     | タイムラインキャプチャ・共有     | **P1** | 1d       | 020               | ✅   |
-| 036 | Year Ruler & Era Labels | 年代目盛り・全時代和暦対応    | **P0** | 1.5d     | 020, 022          | -    |
+| 036 | Year Ruler & Era Labels | 年代目盛り・全時代和暦対応    | **P0** | 1.5d     | 020, 022          | 実機テスト残 |
 | 037 | EraPickerBar Sync    | → 038に統合                      | -      | -        | -                 | 統合 |
 | 038 | EraPickerBar Redesign | 可変幅 + ミニマップ + 自動スクロール | **P0** | 1.5d | 023              | ✅   |
 | 039 | Context Header       | 現在位置情報の常時表示           | **P1** | 1d       | 020, 022, 024     | ✅   |
 | 038-ext | Selection Sync UX | 選択同期 + 長押し詳細遷移        | **P1** | 1d       | 038, 020          | ✅   |
 | 024-ext | 天皇将軍LOD連動強化 | LODに応じた段階的表示          | **P1** | 1d       | 024               | ✅   |
-| 043 | Onboarding Flow      | ジェスチャーチュートリアル       | **P0** | 1.5d     | 020, 021, 023     | -    |
+| 043 | Onboarding Flow      | ジェスチャーチュートリアル       | **P0** | 1.5d     | 020, 021, 023     | ✅   |
 
 **Sprint 3 合計: 12.5d（2名並行で約1週間）**
 
@@ -475,7 +475,7 @@ Week 6-7 (Sprint 4):
 - [x] [039-context-header.md](039-context-header.md) - Context Header ✅
 - [x] [038-ext-selection-sync.md](038-ext-selection-sync.md) - 038-ext: Selection Sync UX ✅
 - [x] [024-layer-management.md](024-layer-management.md) - 024-ext: 天皇将軍LOD連動強化 ✅
-- [ ] [043-onboarding-flow.md](043-onboarding-flow.md) - Onboarding **【未着手】**
+- [x] [043-onboarding-flow.md](043-onboarding-flow.md) - Onboarding ✅
 
 ### **Sprint 4: 設定・品質・リリース**
 
@@ -503,7 +503,7 @@ Week 6-7 (Sprint 4):
 | Sprint 0 | 001 Tech Validation | ✅ 完了 | 2025-01-24 |
 | Sprint 1 | 010-016 基盤構築 (全7件) | ✅ 完了 | 2025-01-26 |
 | Sprint 2 | 020-025 タイムラインコア (全6件) | ✅ 完了 | 2025-01-28 |
-| Sprint 3 | 030-043 検索・詳細・UI完成 (10/12件) | 🔄 進行中 | 2026-02-02 |
+| Sprint 3 | 030-043 検索・詳細・UI完成 (11/12件) | 🔄 進行中 | 2026-02-02 |
 | Sprint 4 | 040, 050-055 設定・品質・リリース | ⏳ 未開始 | - |
 | v1.5+ | 041-046 課金・世界史連携 | 📋 計画済 | - |
 
@@ -513,11 +513,10 @@ Week 6-7 (Sprint 4):
 > - 038-ext Selection Sync UX ✅
 > - 039 Context Header ✅
 > - 024-ext 天皇将軍LOD連動強化 ✅
+> - 043 Onboarding Flow ✅
 >
 > **Sprint 3 残作業:**
 > - 036 Year Ruler & Era Labels（実機テスト残）
-> - 043 Onboarding Flow（未着手）
-> - 043 Onboarding Flow
 
 ---
 
@@ -590,6 +589,19 @@ DB: expo-sqlite
 
 ---
 
+## ステータス定義
+
+| ステータス | 意味 |
+|-----------|------|
+| ✅ 完了 | 実装完了（コードマージ済み） |
+| 🔄 実機テスト残 | 実装完了、実機テスト未実施（036など） |
+| 進行中 | 実装中 |
+| 未着手 | 未開始 |
+
+> **Note:** 実機テストは Sprint 4 の E2E/品質フェーズでまとめて実施
+
+---
+
 ## 注意事項
 
 ### Sprint 0 の重要性
@@ -616,12 +628,18 @@ DB: expo-sqlite
 
 ---
 
-**最終更新:** 2026-01-31
-**バージョン:** 4.2
+**最終更新:** 2026-02-02
+**バージョン:** 4.3
 
 ---
 
 ## 変更履歴
+
+### v4.3 (2026-02-02)
+- 043 Onboarding Flow 実装完了
+- プログレッシブ開示（TipModal）実装: ブックマーク、レイヤー設定、和暦検索
+- Sprint 3 進捗: 11/12件完了
+- 残作業: 036 Year Ruler 実機テストのみ
 
 ### v4.2 (2026-01-31)
 - **UI画面レイアウトガイドライン追加**: 036/038/039 のスタッキング問題に対応

@@ -93,7 +93,7 @@ So that タイムラインを効果的に操作できる
 │  🖐️ ピンチで時代を探索       │
 │                              │
 │  ┌────────────────────────┐  │
-│  │  [Lottieアニメーション]  │  │
+│  │  [Ioniconsジェスチャーデモ] │  │
 │  │  2本の指で広げる →     │  │
 │  │  詳細が表示！          │  │
 │  └────────────────────────┘  │
@@ -159,7 +159,7 @@ So that タイムラインを効果的に操作できる
 └─────────────────────────────────┘
 ```
 
-### 初回検索実行時
+### 初回検索成功時
 ```
 ┌──────────────────────────┐
 │ 💡 和暦でも検索できます    │
@@ -242,7 +242,7 @@ const STEPS = [
     id: 'gesture',
     title: '🖐️ ピンチで時代を探索',
     description: 'ズームすると：\n・年代目盛りが詳細に\n・イベント・人物が登場\n・タップで詳細表示',
-    showAnimation: true, // Lottieアニメーション表示
+    showAnimation: true, // Ioniconsジェスチャーデモ表示
   },
   {
     id: 'era-jump',
@@ -469,39 +469,39 @@ export default function TabsLayout() {
 
 ## Todo リスト
 
-### Phase 1: Onboarding Store
+### Phase 1: Onboarding Store ✅
 
-- [ ] useOnboardingStore 作成
-- [ ] AsyncStorage で "completed" フラグ保存
-- [ ] 初回起動時に自動チェック
-- [ ] プログレッシブ開示用フラグ追加（tips表示済みトラッキング）
+- [x] useOnboardingStore 作成
+- [x] AsyncStorage で "completed" フラグ保存
+- [x] 初回起動時に自動チェック
+- [x] プログレッシブ開示用フラグ追加（tips表示済みトラッキング）
 
-### Phase 2: Onboarding スクリーン（3ステップ）
+### Phase 2: Onboarding スクリーン（3ステップ）✅
 
-- [ ] app/onboarding/index.tsx 作成
-- [ ] **3 ステップ**コンポーネント実装（v4.1改善）
-- [ ] プログレスバー表示（3ドット）
-- [ ] はじめる / 次へ / 探索開始ボタン
+- [x] app/onboarding/index.tsx 作成
+- [x] **3 ステップ**コンポーネント実装（v4.1改善）
+- [x] プログレスバー表示（3ドット）
+- [x] はじめる / 次へ / 探索開始ボタン
 
-### Phase 3: ジェスチャーチュートリアル
+### Phase 3: ジェスチャーチュートリアル ✅
 
-- [ ] GestureDemo コンポーネント
-- [ ] Lottieアニメーション（ピンチズーム）
-- [ ] EraPickerBarプレビュー
+- [x] GestureDemo コンポーネント
+- [x] ピンチズームビジュアル（Ioniconsベース）
+- [x] EraPickerBarプレビュー
 
-### Phase 4: ルーティング統合
+### Phase 4: ルーティング統合 ✅
 
-- [ ] app/\_layout.tsx で onboarding チェック
-- [ ] 初回起動時に /onboarding へリダイレクト
-- [ ] 2 回目以降は /（tabs）へ直接
+- [x] app/\_layout.tsx で onboarding チェック
+- [x] 初回起動時に /onboarding へリダイレクト
+- [x] 2 回目以降は /（tabs）へ直接
 
-### Phase 5: プログレッシブ開示（Tips）
+### Phase 5: プログレッシブ開示（Tips）✅
 
-- [ ] TipModal コンポーネント作成
-- [ ] 初回イベントタップ時 → ブックマークTip
-- [ ] 3回目起動時 → レイヤー設定Tip
-- [ ] 初回検索時 → 和暦検索Tip
-- [ ] Tips表示済みフラグをAsyncStorageに保存
+- [x] TipModal コンポーネント作成
+- [x] 初回イベントタップ時 → ブックマークTip
+- [x] 3回目起動時 → レイヤー設定Tip
+- [x] 初回検索成功時 → 和暦検索Tip
+- [x] Tips表示済みフラグをAsyncStorageに保存
 
 ### Phase 6: テスト
 
@@ -517,15 +517,23 @@ export default function TabsLayout() {
 
 ```
 stores/
-└── onboardingStore.ts       # Onboarding 状態管理
+├── onboardingStore.ts       # Onboarding 状態管理（Tips フラグ含む）
+└── index.ts                 # エクスポート更新済み
 
 app/
 ├── onboarding/
-│   └── index.tsx            # Onboarding スクリーン
-└── _layout.tsx              # 条件付きルーティング
+│   └── index.tsx            # Onboarding スクリーン（3ステップ）
+├── (tabs)/
+│   ├── _layout.tsx          # 条件付きルーティング
+│   ├── index.tsx            # レイヤー設定Tip統合
+│   └── search.tsx           # 和暦検索Tip統合
+├── event/
+│   └── [id].tsx             # ブックマークTip統合
+└── _layout.tsx              # 起動回数インクリメント
 
 components/
-└── GestureDemo.tsx          # ジェスチャーデモ
+└── ui/
+    └── TipModal.tsx         # プログレッシブ開示用モーダル
 ```
 
 ---
@@ -536,7 +544,7 @@ components/
 | ---------------- | ---------------------------- | ----------------------------------- |
 | 初回起動         | アプリ起動（キャッシュ削除） | 3ステップOnboarding表示             |
 | ステップナビ     | 各ステップで "次へ"          | 3ステップで完了                     |
-| ジェスチャーデモ | Step 2 表示                  | Lottieアニメーション表示            |
+| ジェスチャーデモ | Step 2 表示                  | Ioniconsジェスチャーデモ表示        |
 | EraPickerプレビュー | Step 3 表示               | EraPickerBarプレビュー表示          |
 | スキップ         | Step 1-2で "スキップ"        | メイン画面へ遷移                    |
 | 完了時           | Step 3 で "探索開始"         | onboarding/completed フラグ ON      |
@@ -547,16 +555,24 @@ components/
 ---
 
 **作成日:** 2026-01-25
-**更新日:** 2026-01-31
+**更新日:** 2026-02-02
 **優先度:** P0（P2から昇格）
 **推定工数:** 1.5d
-**ステータス:** Not Started
+**ステータス:** Done ✅
 **ブロッカー:** 014 (Settings/Onboarding store) ✅
 **Sprint:** 3（4から移動）
 
 ---
 
 ## 変更履歴
+
+### v4.3 (2026-02-02)
+
+- Phase 1-5 実装完了
+- TipModal コンポーネント作成
+- プログレッシブ開示（ブックマーク、レイヤー、和暦）実装
+- ファイル構成を実装に合わせて更新
+- ステータス: Done ✅
 
 ### v4.2 (2026-01-31)
 - 依存関係を明確化: MVP は全機能無料、Pro/IAP 関連は v1.5 で対応
@@ -566,7 +582,7 @@ components/
 - UI/UX改善: 8ステップ→**3ステップ**に簡素化（認知負荷軽減）
 - プログレッシブ開示: 高度な機能は使用時にTipsで紹介
 - Step 3 を「時代ジャンプ」に変更
-- Lottieアニメーション導入
+- Ioniconsジェスチャーデモ導入
 - TipModalコンポーネント追加
 
 ### v4.0 (2026-01-31)

@@ -62,7 +62,12 @@ export default function RootLayout() {
 
   // オンボーディング完了状態をチェック（初回起動判定）
   useEffect(() => {
-    checkOnboardingCompleted();
+    const initOnboarding = async () => {
+      await checkOnboardingCompleted();
+      // 起動回数をインクリメント（checkCompleted後にインクリメント）
+      await useOnboardingStore.getState().incrementLaunchCount();
+    };
+    void initOnboarding();
   }, [checkOnboardingCompleted]);
 
   // React Navigation テーマをカスタムカラーで構築

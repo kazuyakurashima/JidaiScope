@@ -24,6 +24,8 @@ import type { HistoricalEvent, Person } from '@/types/database';
 import { useTheme } from '@/hooks/useTheme';
 import { useAppStore } from '@/stores/appStore';
 import { useBookmarkStore } from '@/stores/bookmarkStore';
+import { useOnboardingStore, useBookmarkTipShown, useIsOnboardingInitialized } from '@/stores/onboardingStore';
+import { TipModal } from '@/components/ui/TipModal';
 import { getEventById, getEventsByIds } from '@/data/repositories/EventRepository';
 import { getEraById } from '@/data/repositories/EraRepository';
 import { getPersonsByIds } from '@/data/repositories/PersonRepository';
@@ -48,6 +50,12 @@ export default function EventDetailScreen() {
   const { colors, typography, spacing } = useTheme();
   const dbReady = useAppStore((s) => s.dbReady);
   const touchAccess = useBookmarkStore((s) => s.touchAccess);
+
+  // プログレッシブ開示: ブックマークTip
+  const onboardingInitialized = useIsOnboardingInitialized();
+  const bookmarkTipShown = useBookmarkTipShown();
+  const markBookmarkTipShown = useOnboardingStore((s) => s.markBookmarkTipShown);
+  const [showBookmarkTip, setShowBookmarkTip] = useState(false);
 
   const [event, setEvent] = useState<HistoricalEvent | null>(null);
   const [eraName, setEraName] = useState<string | null>(null);
@@ -131,6 +139,23 @@ export default function EventDetailScreen() {
     },
     [router]
   );
+
+  // 初回イベント表示時のブックマークTip
+  useEffect(() => {
+    // initialized完了後のみ判定（AsyncStorage読み込み前の誤表示を防止）
+    if (onboardingInitialized && !isLoading && event && !bookmarkTipShown) {
+      // 少し遅延させてからTip表示（コンテンツ読み込み後）
+      const timer = setTimeout(() => {
+        setShowBookmarkTip(true);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [onboardingInitialized, isLoading, event, bookmarkTipShown]);
+
+  const handleBookmarkTipClose = useCallback(() => {
+    setShowBookmarkTip(false);
+    void markBookmarkTipShown();
+  }, [markBookmarkTipShown]);
 
   // 日付フォーマット（西暦表示用 - 負の年は紀元前○○年）
   const formatSeirekiDate = (dateStr: string): string => {
@@ -313,6 +338,17 @@ export default function EventDetailScreen() {
         {/* Bottom Spacer */}
         <View style={{ height: spacing[8] }} />
       </ScrollView>
+
+      {/* プログレッシブ開示: ブックマークTip */}
+      <TipModal
+        visible={showBookmarkTip}
+        title="ブックマーク機能"
+        description="右上の☆マークでお気に入り登録できます。あとで見返したい出来事を保存しておきましょう！"
+        icon="bookmark-outline"
+        primaryButtonText="OK"
+        onPrimaryPress={handleBookmarkTipClose}
+        onClose={handleBookmarkTipClose}
+      />
     </>
   );
 }

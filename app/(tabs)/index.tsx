@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import * as MediaLibrary from 'expo-media-library';
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -28,9 +28,11 @@ import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
 
 import { TimelineCanvas, EraPickerBar, ContextHeader } from '@/components/timeline';
+import { TipModal } from '@/components/ui/TipModal';
 import { useTheme } from '@/hooks/useTheme';
 import { useTimelineData } from '@/hooks/useTimelineData';
-import { useAppStore, useTimelineStore } from '@/stores';
+import { useAppStore, useTimelineStore, useLayerTipShown, useLaunchCount, useIsOnboardingInitialized } from '@/stores';
+import { useOnboardingStore } from '@/stores/onboardingStore';
 import { triggerHaptic } from '@/utils/haptics';
 import { generateCaption } from '@/utils/screenshotCaption';
 import type { Era } from '@/types/database';
@@ -55,6 +57,34 @@ export default function TimelineScreen() {
   const showError = error !== null;
 
   const [isCapturing, setIsCapturing] = useState(false);
+
+  // プログレッシブ開示: 3回目起動時のレイヤー設定Tip
+  const onboardingInitialized = useIsOnboardingInitialized();
+  const layerTipShown = useLayerTipShown();
+  const launchCount = useLaunchCount();
+  const markLayerTipShown = useOnboardingStore((s) => s.markLayerTipShown);
+  const [showLayerTip, setShowLayerTip] = useState(false);
+
+  // 3回目起動時にレイヤー設定Tipを表示（initialized完了後のみ判定）
+  useEffect(() => {
+    if (onboardingInitialized && launchCount === 3 && !layerTipShown && !showLoading) {
+      const timer = setTimeout(() => {
+        setShowLayerTip(true);
+      }, 1500); // データ読み込み完了後に表示
+      return () => clearTimeout(timer);
+    }
+  }, [onboardingInitialized, launchCount, layerTipShown, showLoading]);
+
+  const handleLayerTipClose = useCallback(() => {
+    setShowLayerTip(false);
+    void markLayerTipShown();
+  }, [markLayerTipShown]);
+
+  const handleLayerTipSettings = useCallback(() => {
+    setShowLayerTip(false);
+    void markLayerTipShown();
+    router.push('/settings');
+  }, [markLayerTipShown, router]);
 
   // スクリーンショットをキャプチャ
   const captureScreenshot = async (): Promise<string | null> => {
@@ -291,6 +321,19 @@ export default function TimelineScreen() {
           )}
         </View>
       </View>
+
+      {/* プログレッシブ開示: 3回目起動時のレイヤー設定Tip */}
+      <TipModal
+        visible={showLayerTip}
+        title="知ってた？"
+        description="設定で天皇・将軍レイヤーをON/OFFできます。表示情報をカスタマイズしましょう！"
+        icon="layers-outline"
+        primaryButtonText="見てみる"
+        secondaryButtonText="あとで"
+        onPrimaryPress={handleLayerTipSettings}
+        onSecondaryPress={handleLayerTipClose}
+        onClose={handleLayerTipClose}
+      />
     </SafeAreaView>
   );
 }

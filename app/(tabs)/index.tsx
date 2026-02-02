@@ -27,7 +27,7 @@ import {
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
 
-import { TimelineCanvas, EraPickerBar } from '@/components/timeline';
+import { TimelineCanvas, EraPickerBar, ContextHeader } from '@/components/timeline';
 import { useTheme } from '@/hooks/useTheme';
 import { useTimelineData } from '@/hooks/useTimelineData';
 import { useAppStore } from '@/stores';
@@ -47,7 +47,7 @@ export default function TimelineScreen() {
   const dbReady = useAppStore((s) => s.dbReady);
 
   // タイムラインデータ
-  const { eras, events, isLoading, error } = useTimelineData();
+  const { eras, events, reigns, isLoading, error } = useTimelineData();
 
   // ローディング・エラー表示
   const showLoading = !dbReady || isLoading;
@@ -234,6 +234,11 @@ export default function TimelineScreen() {
 
       {/* スクリーンショットキャプチャ対象エリア */}
       <View ref={timelineRef} style={styles.captureArea} collapsable={false}>
+        {/* Context Header - 現在位置表示 */}
+        {!showLoading && !showError && eras.length > 0 && (
+          <ContextHeader eras={eras} reigns={reigns} />
+        )}
+
         {/* Era Picker Bar */}
         {!showLoading && !showError && eras.length > 0 && (
           <EraPickerBar eras={eras} />

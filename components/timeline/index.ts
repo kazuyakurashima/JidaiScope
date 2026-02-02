@@ -9,6 +9,7 @@ export type { TimelineCanvasProps } from './TimelineCanvas';
 export { EraPickerBar } from './EraPickerBar';
 export { EraChipRow } from './EraChipRow';
 export { MiniMap } from './MiniMap';
+export { ContextHeader } from './ContextHeader';
 
 // Drawing utilities (for advanced use cases)
 export { drawEras, getEraColor } from './drawEras';

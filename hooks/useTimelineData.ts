@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 
 import { getDatabase } from '@/data/database';
-import type { Era, EraRow, HistoricalEvent, EventRow, EventTag, ImportanceLevel, EventSource } from '@/types/database';
+import type { Era, EraRow, HistoricalEvent, EventRow, EventTag, ImportanceLevel, EventSource, Reign, OfficeType } from '@/types/database';
 import { useAppStore } from '@/stores';
 
 // =============================================================================
@@ -16,8 +16,20 @@ import { useAppStore } from '@/stores';
 interface TimelineData {
   eras: Era[];
   events: HistoricalEvent[];
+  reigns: Reign[];
   isLoading: boolean;
   error: Error | null;
+}
+
+// ReignRow with person name joined (from SQL query)
+interface ReignWithNameRow {
+  id: string;
+  personId: string;
+  officeType: string;
+  startYear: number;
+  endYear: number;
+  ordinal: number | null;
+  personName: string;
 }
 
 // =============================================================================
@@ -52,6 +64,26 @@ function convertEventRow(row: EventRow): HistoricalEvent {
   };
 }
 
+function convertReignRow(row: ReignWithNameRow): Reign {
+  return {
+    id: row.id,
+    personId: row.personId,
+    officeType: row.officeType as OfficeType,
+    startYear: row.startYear,
+    endYear: row.endYear,
+    ordinal: row.ordinal,
+    // personName is added as extension for display
+    name: row.personName,
+  };
+}
+
+// Extended Reign type with name for display
+declare module '@/types/database' {
+  interface Reign {
+    name?: string;
+  }
+}
+
 // =============================================================================
 // Hook
 // =============================================================================
@@ -64,6 +96,7 @@ function convertEventRow(row: EventRow): HistoricalEvent {
 export function useTimelineData(): TimelineData {
   const [eras, setEras] = useState<Era[]>([]);
   const [events, setEvents] = useState<HistoricalEvent[]>([]);
+  const [reigns, setReigns] = useState<Reign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -91,8 +124,17 @@ export function useTimelineData(): TimelineData {
           'SELECT * FROM event ORDER BY startDate ASC'
         );
 
+        // 在位データ取得（人物名をJOIN、startYear 順）
+        const reignRows = await db.getAllAsync<ReignWithNameRow>(
+          `SELECT r.*, p.name as personName
+           FROM reign r
+           LEFT JOIN person p ON r.personId = p.id
+           ORDER BY r.startYear ASC`
+        );
+
         setEras(eraRows.map(convertEraRow));
         setEvents(eventRows.map(convertEventRow));
+        setReigns(reignRows.map(convertReignRow));
       } catch (err) {
         console.error('[useTimelineData] Failed to fetch data:', err);
         setError(err instanceof Error ? err : new Error('Failed to fetch timeline data'));
@@ -104,7 +146,7 @@ export function useTimelineData(): TimelineData {
     fetchData();
   }, [dbReady]);
 
-  return { eras, events, isLoading, error };
+  return { eras, events, reigns, isLoading, error };
 }
 
 export default useTimelineData;

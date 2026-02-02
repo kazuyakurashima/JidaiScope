@@ -26,4 +26,5 @@ export {
   useOnboardingStore,
   useIsOnboardingCompleted,
   useIsOnboardingInitialized,
+  useLongPressHintShown,
 } from './onboardingStore';

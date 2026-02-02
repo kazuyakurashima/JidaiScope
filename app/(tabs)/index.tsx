@@ -30,9 +30,10 @@ import { captureRef } from 'react-native-view-shot';
 import { TimelineCanvas, EraPickerBar, ContextHeader } from '@/components/timeline';
 import { useTheme } from '@/hooks/useTheme';
 import { useTimelineData } from '@/hooks/useTimelineData';
-import { useAppStore } from '@/stores';
+import { useAppStore, useTimelineStore } from '@/stores';
 import { triggerHaptic } from '@/utils/haptics';
 import { generateCaption } from '@/utils/screenshotCaption';
+import type { Era } from '@/types/database';
 
 // Expo Go では react-native-share が動作しないため環境判定
 const isExpoGo = Constants.appOwnership === 'expo';
@@ -132,6 +133,12 @@ export default function TimelineScreen() {
     } finally {
       setIsCapturing(false);
     }
+  };
+
+  // 時代チップ長押し → 時代詳細画面へ遷移
+  const handleEraLongPress = (era: Era) => {
+    void triggerHaptic('medium');
+    router.push(`/era/${era.id}`);
   };
 
   // シェアボタンタップ時のアクション
@@ -241,7 +248,7 @@ export default function TimelineScreen() {
 
         {/* Era Picker Bar */}
         {!showLoading && !showError && eras.length > 0 && (
-          <EraPickerBar eras={eras} />
+          <EraPickerBar eras={eras} onEraLongPress={handleEraLongPress} />
         )}
 
         {/* タイムライン本体 */}
@@ -271,6 +278,15 @@ export default function TimelineScreen() {
             <TimelineCanvas
               eras={eras}
               events={events}
+              reigns={reigns}
+              onEraPress={(eraId) => {
+                // タップで時代選択（EraPickerBarと同期）
+                useTimelineStore.getState().selectEra(eraId);
+              }}
+              onEraLongPress={(eraId) => {
+                // 長押しで詳細画面へ（ハプティクスはCanvas側で発火済み）
+                router.push(`/era/${eraId}`);
+              }}
             />
           )}
         </View>

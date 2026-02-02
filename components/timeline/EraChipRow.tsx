@@ -24,8 +24,12 @@ import { useTheme } from '@/hooks/useTheme';
 
 interface EraChipRowProps {
   eras: Era[];
-  currentEraId: string | null;
+  /** ハイライト表示する時代ID（selectedEraId ?? currentEraId） */
+  highlightedEraId: string | null;
+  /** 自動スクロール対象の時代ID（常にタイムラインの現在位置） */
+  autoScrollEraId: string | null;
   onEraPress: (era: Era) => void;
+  onEraLongPress?: (era: Era) => void;
 }
 
 // =============================================================================
@@ -52,7 +56,10 @@ function getEraDisplayName(name: string): string {
 // Component
 // =============================================================================
 
-export function EraChipRow({ eras, currentEraId, onEraPress }: EraChipRowProps) {
+/** 長押し判定の閾値（ms）- 038-ext仕様に準拠 */
+const LONG_PRESS_DELAY = 500;
+
+export function EraChipRow({ eras, highlightedEraId, autoScrollEraId, onEraPress, onEraLongPress }: EraChipRowProps) {
   const { colors } = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
   const prevEraIdRef = useRef<string | null>(null);
@@ -65,15 +72,16 @@ export function EraChipRow({ eras, currentEraId, onEraPress }: EraChipRowProps) 
   };
 
   // 時代変化時の自動スクロール（037の機能を統合）
+  // autoScrollEraIdを使用し、ユーザー選択とは独立して動作
   useEffect(() => {
     if (!scrollViewRef.current) return;
-    if (currentEraId === prevEraIdRef.current) return;
-    prevEraIdRef.current = currentEraId;
+    if (autoScrollEraId === prevEraIdRef.current) return;
+    prevEraIdRef.current = autoScrollEraId;
 
-    if (!currentEraId) return;
+    if (!autoScrollEraId) return;
 
     // レイアウト情報から該当チップの位置を取得
-    const chipLayout = chipLayoutsRef.current.get(currentEraId);
+    const chipLayout = chipLayoutsRef.current.get(autoScrollEraId);
     if (chipLayout) {
       scrollViewRef.current.scrollTo({
         x: Math.max(0, chipLayout.x - 100), // 少し余裕を持たせる
@@ -81,7 +89,7 @@ export function EraChipRow({ eras, currentEraId, onEraPress }: EraChipRowProps) 
       });
     } else {
       // フォールバック: インデックスベースで概算
-      const eraIndex = eras.findIndex((e) => e.id === currentEraId);
+      const eraIndex = eras.findIndex((e) => e.id === autoScrollEraId);
       if (eraIndex >= 0) {
         // 概算: 平均幅60px + gap 6px
         const estimatedOffset = eraIndex * 66;
@@ -91,7 +99,7 @@ export function EraChipRow({ eras, currentEraId, onEraPress }: EraChipRowProps) 
         });
       }
     }
-  }, [currentEraId, eras]);
+  }, [autoScrollEraId, eras]);
 
   return (
     <ScrollView
@@ -101,26 +109,28 @@ export function EraChipRow({ eras, currentEraId, onEraPress }: EraChipRowProps) 
       contentContainerStyle={styles.chipContainer}
     >
       {eras.map((era) => {
-        const isCurrent = era.id === currentEraId;
+        const isHighlighted = era.id === highlightedEraId;
         const eraColor = era.color ?? colors.primary;
 
         return (
           <Pressable
             key={era.id}
             onPress={() => onEraPress(era)}
+            onLongPress={onEraLongPress ? () => onEraLongPress(era) : undefined}
+            delayLongPress={LONG_PRESS_DELAY}
             onLayout={(event) => handleChipLayout(era.id, event)}
             accessibilityRole="button"
             accessibilityLabel={`${era.name}時代`}
-            accessibilityHint="タップしてこの時代にジャンプ"
+            accessibilityHint="タップでジャンプ、長押しで詳細表示"
             style={({ pressed }) => [
               styles.chip,
               {
-                backgroundColor: isCurrent ? eraColor : 'transparent',
+                backgroundColor: isHighlighted ? eraColor : 'transparent',
                 borderColor: eraColor,
                 opacity: pressed ? 0.7 : 1,
               },
               // 現在時代の強調（シャドウ + 微細スケール）
-              isCurrent && {
+              isHighlighted && {
                 shadowColor: eraColor,
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.4,
@@ -134,7 +144,7 @@ export function EraChipRow({ eras, currentEraId, onEraPress }: EraChipRowProps) 
             <Text
               style={[
                 styles.chipText,
-                { color: isCurrent ? colors.bg : colors.text },
+                { color: isHighlighted ? colors.bg : colors.text },
               ]}
             >
               {getEraDisplayName(era.name)}

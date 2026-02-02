@@ -7,12 +7,13 @@
  * - 下段: 真比率ミニマップ（現在位置インジケーター）
  */
 
-import { useCallback, useMemo, useRef, useEffect } from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { useCallback, useMemo, useRef, useEffect, useState } from 'react';
+import { View, StyleSheet, useWindowDimensions, Text, Animated } from 'react-native';
 
 import type { Era } from '@/types/database';
 import { useTheme } from '@/hooks/useTheme';
 import { useTimelineStore } from '@/stores/timelineStore';
+import { useOnboardingStore, useLongPressHintShown, useIsOnboardingInitialized } from '@/stores';
 import {
   TIMELINE_START_YEAR,
   getPixelsPerYear,
@@ -29,6 +30,8 @@ import { MiniMap } from './MiniMap';
 interface EraPickerBarProps {
   /** 表示する時代一覧（startYear順にソート済み） */
   eras: Era[];
+  /** 時代チップ長押し時のコールバック（詳細表示用） */
+  onEraLongPress?: (era: Era) => void;
 }
 
 // =============================================================================
@@ -42,7 +45,7 @@ const JUMP_ANIMATION_DURATION = 400;
 // Component
 // =============================================================================
 
-export function EraPickerBar({ eras }: EraPickerBarProps) {
+export function EraPickerBar({ eras, onEraLongPress }: EraPickerBarProps) {
   const { width: screenWidth } = useWindowDimensions();
   const { colors } = useTheme();
 
@@ -52,6 +55,49 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
   const setScroll = useTimelineStore((s) => s.setScroll);
   const selectedEraId = useTimelineStore((s) => s.selectedEraId);
   const selectEra = useTimelineStore((s) => s.selectEra);
+
+  // Long press hint (初回のみ表示)
+  const initialized = useIsOnboardingInitialized();
+  const longPressHintShown = useLongPressHintShown();
+  const markLongPressHintShown = useOnboardingStore((s) => s.markLongPressHintShown);
+  const [showHint, setShowHint] = useState(false);
+  const hintOpacity = useRef(new Animated.Value(0)).current;
+
+  // 初回表示時のヒント表示（4秒後に自動消失）
+  // initialized=true になるまで待機し、既存ユーザーで一瞬ヒントが出る問題を防止
+  useEffect(() => {
+    // AsyncStorage チェック完了まで待機
+    if (!initialized) return;
+    // 既に表示済み or コールバックなしの場合はスキップ
+    if (longPressHintShown || !onEraLongPress) return;
+
+    // 少し遅延してから表示（UI安定後）
+    const showTimer = setTimeout(() => {
+      setShowHint(true);
+      Animated.timing(hintOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }, 1000);
+
+    // 4秒後に自動消失
+    const hideTimer = setTimeout(() => {
+      Animated.timing(hintOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowHint(false);
+        void markLongPressHintShown();
+      });
+    }, 5000); // 1秒待機 + 4秒表示 = 5秒
+
+    return () => {
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
+    };
+  }, [initialized, longPressHintShown, onEraLongPress, hintOpacity, markLongPressHintShown]);
 
   // Animation ref
   const animationRef = useRef<number | null>(null);
@@ -197,9 +243,24 @@ export function EraPickerBar({ eras }: EraPickerBarProps) {
       {/* 可変幅チップ行 */}
       <EraChipRow
         eras={eras}
-        currentEraId={selectedEraId ?? currentEraId}
+        highlightedEraId={selectedEraId ?? currentEraId}
+        autoScrollEraId={currentEraId}
         onEraPress={handleEraPress}
+        onEraLongPress={onEraLongPress}
       />
+
+      {/* 長押しヒント（初回のみ） */}
+      {showHint && (
+        <Animated.View
+          style={[
+            styles.hintContainer,
+            { backgroundColor: colors.primary, opacity: hintOpacity },
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={styles.hintText}>💡 長押しで詳細を表示</Text>
+        </Animated.View>
+      )}
 
       {/* セパレーター（誤タップ防止） */}
       <View style={[styles.separator, { backgroundColor: colors.border }]} />
@@ -227,5 +288,25 @@ const styles = StyleSheet.create({
   separator: {
     height: 4,
     opacity: 0.3,
+  },
+  hintContainer: {
+    position: 'absolute',
+    top: 60,
+    left: '50%',
+    transform: [{ translateX: -80 }],
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  hintText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

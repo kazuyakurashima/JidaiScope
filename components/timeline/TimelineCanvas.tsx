@@ -102,9 +102,14 @@ export interface TimelineCanvasProps {
   reigns?: Reign[];
   /** イベントタップ時のコールバック */
   onEventPress?: (eventId: string) => void;
-  /** 時代タップ時のコールバック */
+  /** 時代タップ時のコールバック（選択/ジャンプ用） */
   onEraPress?: (eraId: string) => void;
+  /** 時代長押し時のコールバック（詳細表示用） */
+  onEraLongPress?: (eraId: string) => void;
 }
+
+/** 長押し判定の閾値（ms）- 038-ext仕様に準拠 */
+const LONG_PRESS_DELAY = 500;
 
 // =============================================================================
 // Helper Functions
@@ -195,6 +200,7 @@ export function TimelineCanvas({
   reigns = [],
   onEventPress,
   onEraPress,
+  onEraLongPress,
 }: TimelineCanvasProps) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const router = useRouter();
@@ -207,6 +213,7 @@ export function TimelineCanvas({
   const setScroll = useTimelineStore((s) => s.setScroll);
   const lodLevel = useTimelineStore((s) => s.lodLevel);
   const setLOD = useTimelineStore((s) => s.setLOD);
+  const selectedEraId = useTimelineStore((s) => s.selectedEraId);
 
   // Settings Store (Layer visibility)
   const visibleLayers = useSettingsStore((s) => s.visibleLayers);
@@ -273,6 +280,34 @@ export function TimelineCanvas({
   const labelY = screenHeight * ERA_LABEL_Y_RATIO;
   const rulerY = screenHeight * YEAR_RULER_Y_RATIO;
 
+  // 現在の時代を計算（画面中央の年を含む時代）
+  // 重複時代（例: 室町 1336-1573 & 戦国 1467-1590）の場合、
+  // 最も短い時代（より具体的な時代）を優先
+  // EraPickerBar の currentEraId と同一ロジック
+  const focusedEraId = useMemo(() => {
+    const centerPixelX = screenWidth / 2;
+    const centerYear = pixelToYear(centerPixelX, config);
+
+    // この年を含む全ての時代を検索
+    const matchingEras = eras.filter(
+      (e) => centerYear >= e.startYear && centerYear < e.endYear
+    );
+
+    if (matchingEras.length === 0) {
+      return null;
+    }
+
+    // 期間でソート（短い順）して最も具体的な時代を選択
+    matchingEras.sort(
+      (a, b) => (a.endYear - a.startYear) - (b.endYear - b.startYear)
+    );
+
+    return matchingEras[0].id;
+  }, [eras, config, screenWidth]);
+
+  // ハイライト対象の時代ID（選択優先、なければ現在フォーカス中の時代）
+  const highlightedEraId = selectedEraId ?? focusedEraId;
+
   // ==========================================================================
   // Event Handlers
   // ==========================================================================
@@ -297,16 +332,35 @@ export function TimelineCanvas({
     (eraId: string) => {
       try {
         console.log('[TimelineCanvas] Era pressed:', eraId);
+        void triggerHaptic('selection');
         if (onEraPress) {
           onEraPress(eraId);
-        } else {
-          router.push(`/era/${eraId}`);
         }
+        // タップではデフォルトで詳細画面に遷移しない（038-ext仕様）
+        // 長押しで詳細に遷移する
       } catch (error) {
         console.error('[TimelineCanvas] Era press error:', error);
       }
     },
-    [onEraPress, router]
+    [onEraPress]
+  );
+
+  // 時代長押し → 詳細画面へ遷移
+  const handleEraLongPress = useCallback(
+    (eraId: string) => {
+      try {
+        console.log('[TimelineCanvas] Era long pressed:', eraId);
+        void triggerHaptic('medium');
+        if (onEraLongPress) {
+          onEraLongPress(eraId);
+        } else {
+          router.push(`/era/${eraId}`);
+        }
+      } catch (error) {
+        console.error('[TimelineCanvas] Era long press error:', error);
+      }
+    },
+    [onEraLongPress, router]
   );
 
   const handleTap = useCallback(
@@ -469,6 +523,55 @@ export function TimelineCanvas({
     [handleTap, scale, translateX]
   );
 
+  // 長押しでヒットテストして時代詳細画面へ遷移
+  const handleLongPress = useCallback(
+    (x: number, y: number, currentScale: number, currentTranslateX: number) => {
+      if (typeof x !== 'number' || typeof y !== 'number') {
+        return;
+      }
+      if (!eras || eras.length === 0) {
+        return;
+      }
+
+      try {
+        const lpConfig: CoordinateConfig = {
+          screenWidth,
+          screenHeight,
+          zoomLevel: currentScale,
+          scrollX: currentTranslateX,
+        };
+
+        const result = hitTest(x, y, {
+          ...lpConfig,
+          events: [],  // 長押しでは時代のみ検出
+          eras,
+        });
+
+        if (result.type === 'era' && result.id) {
+          handleEraLongPress(result.id);
+        }
+      } catch (error) {
+        console.error('[TimelineCanvas] Long press error:', error);
+      }
+    },
+    [screenWidth, screenHeight, eras, handleEraLongPress]
+  );
+
+  const longPressGesture = useMemo(
+    () =>
+      Gesture.LongPress()
+        .minDuration(LONG_PRESS_DELAY)
+        .onEnd((e) => {
+          'worklet';
+          const x = e.x;
+          const y = e.y;
+          const currentScale = scale.value;
+          const currentTranslateX = translateX.value;
+          runOnJS(handleLongPress)(x, y, currentScale, currentTranslateX);
+        }),
+    [handleLongPress, scale, translateX]
+  );
+
   // ダブルタップズーム（x2）
   const handleDoubleTapZoom = useCallback(
     (tapX: number, currentZoom: number, currentScrollX: number) => {
@@ -522,12 +625,18 @@ export function TimelineCanvas({
     [doubleTapGesture, tapGesture]
   );
 
+  // 長押しとタップを排他的に（長押しが成功したらタップは発火しない）
+  const tapAndLongPressGestures = useMemo(
+    () => Gesture.Exclusive(longPressGesture, tapGestures),
+    [longPressGesture, tapGestures]
+  );
+
   const composedGesture = useMemo(
     () => Gesture.Race(
-      tapGestures,
+      tapAndLongPressGestures,
       Gesture.Simultaneous(panGesture, pinchGesture)
     ),
-    [tapGestures, panGesture, pinchGesture]
+    [tapAndLongPressGestures, panGesture, pinchGesture]
   );
 
   // ==========================================================================
@@ -808,25 +917,39 @@ export function TimelineCanvas({
                 const startX = yearToPixel(era.startYear, config);
                 const endX = yearToPixel(era.endYear, config);
                 const width = endX - startX;
+                const isHighlighted = era.id === highlightedEraId;
+                const eraColor = getEraColor(era.id, era.color);
 
                 if (width < 1) return null;
 
                 return (
                   <Group key={`era-${era.id}`}>
-                    {/* 背景帯 */}
+                    {/* 背景帯（ハイライト時はopacity強調） */}
                     <Rect
                       x={startX}
                       y={bandTop}
                       width={width}
                       height={bandHeight}
-                      color={getEraColor(era.id, era.color)}
-                      opacity={0.4}
+                      color={eraColor}
+                      opacity={isHighlighted ? 0.7 : 0.4}
                     />
+                    {/* ハイライト時の強調枠線 */}
+                    {isHighlighted && (
+                      <Rect
+                        x={startX}
+                        y={bandTop}
+                        width={width}
+                        height={bandHeight}
+                        color={eraColor}
+                        style="stroke"
+                        strokeWidth={3}
+                      />
+                    )}
                     {/* 境界線 */}
                     <Line
                       p1={vec(startX, bandTop)}
                       p2={vec(startX, bandBottom)}
-                      color={getEraColor(era.id, era.color)}
+                      color={eraColor}
                       strokeWidth={1}
                       opacity={0.7}
                     />

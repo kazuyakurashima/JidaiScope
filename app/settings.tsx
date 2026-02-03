@@ -2,16 +2,25 @@
  * Settings Screen - 設定モーダル
  * Sprint 1: 011 Navigation Architecture
  * Sprint 1: 016 Dark Theme
+ * Sprint 4: 040 Settings Screen
  */
 
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useMemo, useCallback } from 'react';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useTheme } from '@/hooks/useTheme';
 import { useSettingsStore } from '@/stores/settingsStore';
-import type { ThemeMode } from '@/types/store';
+import { useSearchStore } from '@/stores/searchStore';
+import { useOnboardingStore } from '@/stores/onboardingStore';
+import { triggerHaptic } from '@/utils/haptics';
+import type { ThemeMode, LayerType } from '@/types/store';
+
+// アプリバージョン
+const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
 
 // テーマオプション定義
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -23,7 +32,60 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionic
 export default function SettingsScreen() {
   const router = useRouter();
   const { colors, typography, spacing, radius, isDark } = useTheme();
-  const { theme, setTheme, hapticEnabled, toggleHaptic } = useSettingsStore();
+  const { theme, setTheme, hapticEnabled, toggleHaptic, visibleLayers, toggleLayer } = useSettingsStore();
+  const clearSearchHistory = useSearchStore((s) => s.clearHistory);
+  const resetOnboarding = useOnboardingStore((s) => s.resetOnboarding);
+
+  // レイヤートグルハンドラー
+  const handleToggleLayer = useCallback(async (type: LayerType) => {
+    await triggerHaptic('light');
+    await toggleLayer(type);
+  }, [toggleLayer]);
+
+  // 検索履歴クリア
+  const handleClearSearchHistory = useCallback(async () => {
+    Alert.alert(
+      '検索履歴をクリア',
+      '検索履歴とキャッシュをクリアしますか？',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: 'クリア',
+          style: 'destructive',
+          onPress: async () => {
+            await triggerHaptic('medium');
+            clearSearchHistory();
+            Alert.alert('完了', '検索履歴をクリアしました');
+          },
+        },
+      ]
+    );
+  }, [clearSearchHistory]);
+
+  // オンボーディングリセット
+  const handleResetOnboarding = useCallback(async () => {
+    Alert.alert(
+      'オンボーディングをリセット',
+      '次回起動時にチュートリアルが再表示されます',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: 'リセット',
+          style: 'destructive',
+          onPress: async () => {
+            await triggerHaptic('medium');
+            await resetOnboarding();
+            Alert.alert('完了', 'オンボーディングをリセットしました');
+          },
+        },
+      ]
+    );
+  }, [resetOnboarding]);
+
+  // 外部リンクを開く
+  const openLink = useCallback((url: string) => {
+    void Linking.openURL(url);
+  }, []);
 
   // 動的スタイル
   const styles = useMemo(() => ({
@@ -162,6 +224,23 @@ export default function SettingsScreen() {
       fontSize: typography.size.xs,
       marginTop: spacing[1],
     },
+    rowChevron: {
+      marginLeft: spacing[2],
+    },
+    dangerText: {
+      color: colors.error,
+    },
+    debugSection: {
+      marginTop: spacing[4],
+    },
+    debugSectionTitle: {
+      color: colors.textTertiary,
+      fontSize: typography.size.xs,
+      fontWeight: typography.weight.medium,
+      marginBottom: spacing[2],
+      textTransform: 'uppercase' as const,
+      letterSpacing: 0.5,
+    },
   }), [colors, typography, spacing, radius]);
 
   return (
@@ -248,24 +327,110 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* 情報セクション */}
+        {/* レイヤー設定セクション */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>レイヤー表示</Text>
+          <View style={styles.sectionContent}>
+            <Pressable style={styles.row} onPress={() => handleToggleLayer('emperor')}>
+              <View style={styles.rowLabel}>
+                <Ionicons name="person" size={20} color={colors.text} />
+                <Text style={styles.rowText}>天皇</Text>
+              </View>
+              <View
+                style={[
+                  styles.toggle,
+                  visibleLayers.emperor ? styles.toggleActive : styles.toggleInactive,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.toggleKnob,
+                    visibleLayers.emperor ? styles.toggleKnobActive : styles.toggleKnobInactive,
+                  ]}
+                />
+              </View>
+            </Pressable>
+            <Pressable style={[styles.row, styles.rowLast]} onPress={() => handleToggleLayer('shogun')}>
+              <View style={styles.rowLabel}>
+                <Ionicons name="shield" size={20} color={colors.text} />
+                <Text style={styles.rowText}>将軍</Text>
+              </View>
+              <View
+                style={[
+                  styles.toggle,
+                  visibleLayers.shogun ? styles.toggleActive : styles.toggleInactive,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.toggleKnob,
+                    visibleLayers.shogun ? styles.toggleKnobActive : styles.toggleKnobInactive,
+                  ]}
+                />
+              </View>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* 情報・法務セクション */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>情報</Text>
           <View style={styles.sectionContent}>
             <View style={styles.row}>
               <View style={styles.rowLabel}>
-                <Ionicons name="layers-outline" size={20} color={colors.text} />
-                <Text style={styles.rowText}>レイヤー設定</Text>
+                <Ionicons name="information-circle-outline" size={20} color={colors.text} />
+                <Text style={styles.rowText}>バージョン</Text>
               </View>
-              <Text style={styles.rowValue}>Sprint 2</Text>
+              <Text style={styles.rowValue}>{APP_VERSION}</Text>
             </View>
-            <View style={[styles.row, styles.rowLast]}>
+            <Pressable
+              style={styles.row}
+              onPress={() => openLink('https://jidaiscope.app/privacy')}
+            >
               <View style={styles.rowLabel}>
-                <Ionicons name="diamond-outline" size={20} color={colors.text} />
-                <Text style={styles.rowText}>Pro版</Text>
+                <Ionicons name="shield-checkmark-outline" size={20} color={colors.text} />
+                <Text style={styles.rowText}>プライバシーポリシー</Text>
               </View>
-              <Text style={styles.rowValue}>Sprint 4</Text>
-            </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} style={styles.rowChevron} />
+            </Pressable>
+            <Pressable
+              style={[styles.row, styles.rowLast]}
+              onPress={() => openLink('https://jidaiscope.app/terms')}
+            >
+              <View style={styles.rowLabel}>
+                <Ionicons name="document-text-outline" size={20} color={colors.text} />
+                <Text style={styles.rowText}>利用規約</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} style={styles.rowChevron} />
+            </Pressable>
+          </View>
+        </View>
+
+        {/* データ管理セクション */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>データ管理</Text>
+          <View style={styles.sectionContent}>
+            <Pressable style={[styles.row, styles.rowLast]} onPress={handleClearSearchHistory}>
+              <View style={styles.rowLabel}>
+                <Ionicons name="trash-outline" size={20} color={colors.error} />
+                <Text style={[styles.rowText, styles.dangerText]}>検索履歴をクリア</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} style={styles.rowChevron} />
+            </Pressable>
+          </View>
+        </View>
+
+        {/* デバッグセクション */}
+        <View style={[styles.section, styles.debugSection]}>
+          <Text style={styles.debugSectionTitle}>デバッグ</Text>
+          <View style={styles.sectionContent}>
+            <Pressable style={[styles.row, styles.rowLast]} onPress={handleResetOnboarding}>
+              <View style={styles.rowLabel}>
+                <Ionicons name="refresh-outline" size={20} color={colors.text} />
+                <Text style={styles.rowText}>オンボーディングをリセット</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} style={styles.rowChevron} />
+            </Pressable>
           </View>
         </View>
       </ScrollView>
@@ -273,7 +438,7 @@ export default function SettingsScreen() {
       {/* フッター */}
       <View style={styles.footer}>
         <Text style={styles.footerText}>JidaiScope</Text>
-        <Text style={styles.footerVersion}>v1.0.0 (Sprint 1)</Text>
+        <Text style={styles.footerVersion}>v{APP_VERSION}</Text>
       </View>
     </View>
   );

@@ -482,45 +482,50 @@ export default function TabsLayout() {
 
 ## Todo リスト
 
-### Phase 1: Settings Store 拡張（014 対応）
+### Phase 1: Settings Store（014 で実装済み）✅
 
-- [ ] language: 'ja' | 'en' フィールド追加
-- [ ] theme: 'dark' | 'light' フィールド追加
-- [ ] AsyncStorage で persistence
-- [ ] デフォルト値設定
+- [x] theme: 'dark' | 'light' | 'system' フィールド
+- [x] hapticEnabled フィールド
+- [x] visibleLayers（レイヤー表示設定）
+- [x] AsyncStorage で persistence
 
-### Phase 2: Settings 画面構築
+### Phase 2: Settings 画面構築 ✅
 
-- [ ] app/settings.tsx 作成
-- [ ] 言語切り替えボタン
-- [ ] テーマ切り替えボタン
-- [ ] ハプティクス ON/OFF トグル（025 統合）
+- [x] app/settings.tsx 作成
+- [x] テーマ切り替えボタン（dark/light/system）
+- [x] ハプティクス ON/OFF トグル
+- [x] レイヤー設定（天皇/将軍トグル）
 
-### Phase 3: キャッシュ管理機能
+### Phase 3: データ管理機能 ✅
 
-- [ ] clearCache() 実装
-- [ ] "キャッシュをクリア" ボタン
-- [ ] 確認ダイアログ表示
+- [x] 検索履歴クリア機能
+- [x] 確認ダイアログ表示
+- [x] オンボーディングリセット（デバッグ用）
 
-### Phase 4: アバウト・サポート
+### Phase 4: アバウト・法務 ✅
 
-- [ ] バージョン表示
-- [ ] ライセンス表示
-- [ ] プライバシーポリシーリンク
-- [ ] メール / Discord リンク
+- [x] バージョン表示（Constants.expoConfig.version）
+- [x] プライバシーポリシーリンク
+- [x] 利用規約リンク
 
-### Phase 5: テーマ適用（016 連携）
+### Phase 5: テーマ適用（016 で実装済み）✅
 
-- [ ] useTheme() hook 実装
-- [ ] Settings 変更時に全画面リフレッシュ
-- [ ] Dark/Light theme 即座に反映
+- [x] useTheme() hook 実装
+- [x] Settings 変更時に全画面リフレッシュ
+- [x] Dark/Light/System theme 即座に反映
 
-### Phase 6: テスト
+### Phase 6: テスト（実機テスト残）
 
-- [ ] 言語切り替え → アプリ全体に反映
 - [ ] テーマ切り替え → UI リアルタイム変更
 - [ ] ハプティクス ON/OFF → 即座に機能
-- [ ] キャッシュクリア → 動作確認
+- [ ] レイヤー切り替え → タイムライン反映
+- [ ] 検索履歴クリア → 動作確認
+
+### 延期（v1.5+）
+
+- [ ] 言語選択（日本語/English）※i18n対応が必要
+- [ ] Discord コミュニティリンク
+- [ ] メールサポートリンク
 
 ---
 
@@ -558,7 +563,8 @@ components/
 ---
 
 **作成日:** 2025-01-25
+**更新日:** 2026-02-02
 **優先度:** P2
 **推定工数:** 1.5d
-**ステータス:** Not Started
-**ブロッカー:** 014 (Settings store base)
+**ステータス:** Done ✅
+**ブロッカー:** 014 (Settings store base) - 解消済み
